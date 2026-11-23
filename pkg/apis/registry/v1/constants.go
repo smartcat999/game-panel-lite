@@ -47,6 +47,8 @@ const (
 	UpstreamProviderModrinth     = "modrinth"
 	UpstreamProviderThunderstore = "thunderstore"
 	UpstreamProviderUMod         = "umod"
+	UpstreamProviderFicsit       = "ficsit"
+	UpstreamProviderCS2Plugins   = "cs2plugins"
 	UpstreamProviderSteam        = "steam"
 	UpstreamProviderHTTP         = "http"
 
@@ -59,6 +61,8 @@ const (
 	FormatModrinthAddon   = "modrinth_addon"
 	FormatThunderstoreMod = "thunderstore_mod"
 	FormatUModPlugin      = "umod_plugin"
+	FormatFicsitMod       = "ficsit_mod"
+	FormatCS2Plugin       = "cs2_plugin"
 	FormatGeneric         = "generic"
 
 	ArchiveFormatRaw   = "raw"

@@ -2,6 +2,9 @@ package steam
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -208,6 +211,9 @@ func syncWorkshopMod(ctx context.Context, rt driver.Runtime, rep driver.Reporter
 	if cached := rt.InspectCachedWorkshopPayload(ctx, rep, art, up.SteamAppID, rel, tmpDir); cached != nil {
 		return cached, nil
 	}
+	if up.SteamAppID == addonmirror.SteamAppCS2 {
+		return buildCS2WorkshopManifestPayload(rep, art, workshopID, item, rel, tmpDir)
+	}
 	directURL := strings.TrimSpace(art.Spec.SourceURL)
 	if directURL == "" && item != nil {
 		directURL = item.FileURL
@@ -356,4 +362,50 @@ func inferSteamArchiveFormat(fileName, dlURL string) string {
 	default:
 		return registryv1.ArchiveFormatRaw
 	}
+}
+
+func buildCS2WorkshopManifestPayload(
+	rep driver.Reporter,
+	art *registryv1.Artifact,
+	workshopID string,
+	item *addonmirror.Item,
+	rel *addonmirror.ResolvedRelease,
+	tmpDir string,
+) (*driver.BuiltPayload, error) {
+	if rep != nil {
+		rep.Stage(registryv1.ArtifactStageArchiving, 75, "正在生成 CS2 创意工坊地图索引")
+		rep.Logf("CS2 启动将通过 +host_workshop_map %s 自动拉取地图，生成轻量元数据索引。", workshopID)
+	}
+	title := "workshop-" + workshopID
+	updatedAt := ""
+	if item != nil {
+		title = driver.FirstStr(item.Title, title)
+		updatedAt = strings.TrimSpace(item.UpdatedAt)
+	}
+	raw, err := json.Marshal(struct {
+		WorkshopID string `json:"workshopId"`
+		AppID      int    `json:"appId"`
+		Title      string `json:"title,omitempty"`
+		Version    string `json:"version"`
+		UpdatedAt  string `json:"updatedAt,omitempty"`
+	}{
+		WorkshopID: workshopID, AppID: addonmirror.SteamAppCS2, Title: title,
+		Version: strings.TrimSpace(art.Spec.Version), UpdatedAt: updatedAt,
+	})
+	if err != nil {
+		return nil, err
+	}
+	dst := filepath.Join(tmpDir, "workshop-"+workshopID+".json")
+	if err := os.WriteFile(dst, append(raw, '\n'), 0o644); err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256(append(raw, '\n'))
+	return &driver.BuiltPayload{
+		LocalPath: dst, FileName: filepath.Base(dst), MediaType: "application/json",
+		ArchiveFormat: registryv1.ArchiveFormatRaw, SizeBytes: int64(len(raw) + 1),
+		SHA256Hex: hex.EncodeToString(sum[:]), Build: rel.Build,
+		MapFolders:   []string{workshopID},
+		Dependencies: driver.MergeDeps(rel.Dependencies, art.Status.Dependencies),
+		PublishedAt:  rel.PublishedAt, Changelog: rel.Changelog, UpstreamURL: rel.UpstreamURL,
+	}, nil
 }

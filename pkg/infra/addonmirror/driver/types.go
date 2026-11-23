@@ -15,6 +15,8 @@ const (
 	ProviderNeoForge      = "neoforge"
 	ProviderThunderstore  = "thunderstore"
 	ProviderUMod          = "umod"
+	ProviderFicsit        = "ficsit"
+	ProviderCS2Plugins    = "cs2plugins"
 	ProviderSteam         = "steam"
 	ProviderHTTP          = "http"
 	ProviderTerraria      = "terraria"
@@ -25,6 +27,8 @@ const (
 	FormatModrinthAddon   = "modrinth_addon"
 	FormatThunderstoreMod = "thunderstore_mod"
 	FormatUModPlugin      = "umod_plugin"
+	FormatFicsitMod       = "ficsit_mod"
+	FormatCS2Plugin       = "cs2_plugin"
 	FormatGeneric         = "generic"
 
 	ArchiveFormatRaw   = "raw"
@@ -51,6 +55,7 @@ const (
 	SteamAppDontStarveTogether       = 322330
 	SteamAppTModLoader               = 1281930
 	SteamAppLeft4Dead2               = 550
+	SteamAppCS2                      = 730
 	SteamServerAppPalworld           = 2394010
 	SteamServerAppProjectZomboid     = 380870
 	SteamServerAppDontStarveTogether = 343050
@@ -61,6 +66,9 @@ const (
 	DefaultModrinthBaseURL             = "https://api.modrinth.com/v2"
 	DefaultThunderstoreBaseURL         = "https://thunderstore.io"
 	DefaultUModBaseURL                 = "https://umod.org"
+	DefaultFicsitBaseURL               = "https://api.ficsit.app"
+	DefaultMetamodBaseURL              = "https://mms.alliedmods.net/mmsdrop/2.0"
+	DefaultGitHubAPIBaseURL            = "https://api.github.com"
 	DefaultFabricMetaBaseURL           = "https://meta.fabricmc.net"
 	DefaultMojangManifestURL           = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 	DefaultMojangMirrorBase            = "https://bmclapi2.bangbang93.com"
@@ -87,6 +95,7 @@ type Source struct {
 	Provider            string
 	Endpoint            string
 	Format              string
+	APIKey              string `json:"-"`
 	SteamAppID          int
 	ModrinthLoader      string
 	ModrinthProjectType string

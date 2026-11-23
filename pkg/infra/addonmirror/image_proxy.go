@@ -22,6 +22,8 @@ var defaultAllowedImageHostSuffixes = []string{
 	"cdn.modrinth.com",
 	".thunderstore.io",
 	".umod.org",
+	".ficsit.app",
+	"avatars.githubusercontent.com",
 	"raw.githubusercontent.com",
 	"media.forgecdn.net",
 }

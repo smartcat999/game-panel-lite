@@ -501,6 +501,9 @@ const (
 	AddonInstallModeWorkshopTree = "workshop_tree"
 	AddonInstallModeBepInEx      = "bepinex"
 	AddonInstallModeOxide        = "oxide"
+	AddonInstallModeSML          = "sml"
+	AddonInstallModeCS2Plugin    = "cs2_plugin"
+	AddonInstallModeCS2Workshop  = "cs2_workshop"
 
 	// Instance → App identity (used by instance rendering and cache-affinity scheduling).
 	LabelInstanceApp             = "gamepanel.io/app"
@@ -747,7 +750,7 @@ func validateAddonConfig(prefix string, cfg map[string]string) error {
 
 func validAddonInstallMode(mode string) bool {
 	switch mode {
-	case AddonInstallModeFlatDir, AddonInstallModeTModLatest, AddonInstallModeDSTLocalMods, AddonInstallModeWorkshopTree, AddonInstallModeBepInEx, AddonInstallModeOxide:
+	case AddonInstallModeFlatDir, AddonInstallModeTModLatest, AddonInstallModeDSTLocalMods, AddonInstallModeWorkshopTree, AddonInstallModeBepInEx, AddonInstallModeOxide, AddonInstallModeSML, AddonInstallModeCS2Plugin, AddonInstallModeCS2Workshop:
 		return true
 	default:
 		return false
@@ -1243,29 +1246,96 @@ func (b *AppServerBinding) Validate() error {
 
 // AppAddonBinding binds an App's mod/plugin ecosystem to a Repository in registry.gamepanel.io/v1.
 type AppAddonBinding struct {
-	Repository  string `json:"repository"`
-	InstallMode string `json:"installMode"` // flat_dir | tmod_latest | dst_local_mods | workshop_tree | bepinex | oxide
-	TargetDir   string `json:"targetDir"`   // e.g. "plugins", "Mods", "mods", "oxide", "steamapps/workshop/content/108600"
+	Repository  string            `json:"repository"`
+	InstallMode string            `json:"installMode"` // flat_dir | tmod_latest | dst_local_mods | workshop_tree | bepinex | oxide | sml | cs2_plugin | cs2_workshop
+	TargetDir   string            `json:"targetDir"`   // e.g. "plugins", "Mods", "mods", "oxide", "FactoryGame/Mods", "game/csgo/addons", "steamapps/workshop/content/108600"
+	Label       string            `json:"label,omitempty"`
+	Additional  []AppAddonBinding `json:"additional,omitempty"`
+}
+
+func validateSingleAddonBinding(prefix string, b *AppAddonBinding) error {
+	if err := metav1.ValidateSingleSegmentName(prefix+".repository", b.Repository); err != nil {
+		return err
+	}
+	if !validAddonInstallMode(strings.TrimSpace(b.InstallMode)) {
+		return fmt.Errorf("invalid %s.installMode %q", prefix, b.InstallMode)
+	}
+	td := strings.TrimSpace(b.TargetDir)
+	if td == "" {
+		return fmt.Errorf("%s.targetDir is required", prefix)
+	}
+	if td != "." {
+		if err := metav1.ValidateRelativeFilePath(td); err != nil {
+			return fmt.Errorf("%s.targetDir: %w", prefix, err)
+		}
+	}
+	return nil
 }
 
 func (b *AppAddonBinding) Validate() error {
 	if b == nil {
 		return nil
 	}
-	if err := metav1.ValidateSingleSegmentName("app addonBinding.repository", b.Repository); err != nil {
+	if err := validateSingleAddonBinding("app addonBinding", b); err != nil {
 		return err
 	}
-	if !validAddonInstallMode(strings.TrimSpace(b.InstallMode)) {
-		return fmt.Errorf("invalid app addonBinding.installMode %q", b.InstallMode)
-	}
-	if td := strings.TrimSpace(b.TargetDir); td == "" {
-		return errors.New("app addonBinding.targetDir is required")
-	} else if td != "." {
-		if err := metav1.ValidateRelativeFilePath(td); err != nil {
-			return fmt.Errorf("app addonBinding.targetDir: %w", err)
+	seen := map[string]struct{}{strings.ToLower(strings.TrimSpace(b.Repository)): {}}
+	for i := range b.Additional {
+		sub := &b.Additional[i]
+		prefix := fmt.Sprintf("app addonBinding.additional[%d]", i)
+		if len(sub.Additional) > 0 {
+			return fmt.Errorf("%s cannot nest additional bindings", prefix)
 		}
+		if err := validateSingleAddonBinding(prefix, sub); err != nil {
+			return err
+		}
+		key := strings.ToLower(strings.TrimSpace(sub.Repository))
+		if _, dup := seen[key]; dup {
+			return fmt.Errorf("%s duplicates repository %q", prefix, sub.Repository)
+		}
+		seen[key] = struct{}{}
 	}
 	return nil
+}
+
+// All returns the primary AppAddonBinding followed by any additional bindings configured on the App.
+func (b *AppAddonBinding) All() []AppAddonBinding {
+	if b == nil {
+		return nil
+	}
+	out := make([]AppAddonBinding, 0, 1+len(b.Additional))
+	out = append(out, AppAddonBinding{
+		Repository:  b.Repository,
+		InstallMode: b.InstallMode,
+		TargetDir:   b.TargetDir,
+		Label:       b.Label,
+	})
+	for _, sub := range b.Additional {
+		out = append(out, AppAddonBinding{
+			Repository:  sub.Repository,
+			InstallMode: sub.InstallMode,
+			TargetDir:   sub.TargetDir,
+			Label:       sub.Label,
+		})
+	}
+	return out
+}
+
+// ForRepository resolves the matching binding for repo (falling back to the primary binding when empty or unmatched).
+func (b *AppAddonBinding) ForRepository(repo string) *AppAddonBinding {
+	if b == nil {
+		return nil
+	}
+	needle := strings.ToLower(strings.TrimSpace(repo))
+	if needle == "" || strings.EqualFold(strings.TrimSpace(b.Repository), needle) {
+		return b
+	}
+	for i := range b.Additional {
+		if strings.EqualFold(strings.TrimSpace(b.Additional[i].Repository), needle) {
+			return &b.Additional[i]
+		}
+	}
+	return b
 }
 
 const (

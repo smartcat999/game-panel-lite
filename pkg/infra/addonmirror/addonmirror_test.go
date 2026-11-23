@@ -2,7 +2,9 @@ package addonmirror
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -891,5 +893,84 @@ func TestUModCatalogDetailResolveAndImageProxy(t *testing.T) {
 	}
 	if signed := svc.SignImageProxyURL("/proxy", "https://assets.umod.org/images/icons/plugin/gm.png"); signed == "" {
 		t.Fatal("expected assets.umod.org to be allowlisted for image proxy")
+	}
+	if signed := svc.SignImageProxyURL("/proxy", "https://storage.ficsit.app/file/smr-prod-s3/images/mods/x/logo.webp"); signed == "" {
+		t.Fatal("expected storage.ficsit.app to be allowlisted for image proxy")
+	}
+}
+
+func TestFicsitCatalogDetailResolveAndRelease(t *testing.T) {
+	toks := ParseInputTokens(ProviderFicsit, "https://ficsit.app/mod/RefinedPower, SML")
+	if !slices.Equal(toks, []string{"RefinedPower", "SML"}) {
+		t.Fatalf("unexpected ficsit tokens: %#v", toks)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Query     string         `json:"query"`
+			Variables map[string]any `json:"variables"`
+		}
+		_ = json.Unmarshal(body, &req)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(req.Query, "getMods") {
+			_, _ = w.Write([]byte(`{"data":{"getMods":{"count":1,"mods":[{"id":"id1","mod_reference":"RefinedPower","name":"Refined Power","short_description":"Power expansion","logo":"https://storage.ficsit.app/logo.webp","downloads":1500,"authors":[{"user":{"username":"mrhid6"}}],"tags":[{"name":"power"}],"versions":[{"id":"v1","version":"2026.3.28","created_at":"2026-08-14T10:47:17Z","targets":[{"targetName":"LinuxServer","link":"/v1/version/v1/LinuxServer/download","hash":"shahex1","size":40384686}],"dependencies":[{"mod_id":"SML","condition":"^3.12.0","optional":false},{"mod_id":"Opt","condition":"*","optional":true}]}]}]}}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"getModByIdOrReference":{"id":"id1","mod_reference":"RefinedPower","name":"Refined Power","short_description":"Power expansion","full_description":"Full docs","logo":"https://storage.ficsit.app/logo.webp","downloads":1500,"versions":[{"id":"v1","version":"2026.3.28","changelog":"Maintenance","created_at":"2026-08-14T10:47:17Z","targets":[{"targetName":"Windows","link":"/win","size":10},{"targetName":"LinuxServer","link":"/v1/version/v1/LinuxServer/download","hash":"shahex1","size":40384686}],"dependencies":[{"mod_id":"SML","condition":"^3.12.0","optional":false}]},{"id":"v0","version":"2026.1.0","created_at":"2026-01-01T00:00:00Z","targets":[{"targetName":"Windows","link":"/win-only","size":10}]}]}}}`))
+	}))
+	defer srv.Close()
+
+	svc := New(&unitTestCache{data: make(map[string]string)}, Options{SigningSecret: "sec"})
+	src := Source{Provider: ProviderFicsit, Endpoint: srv.URL + "/v2/query", Format: FormatFicsitMod, ImageProxyPrefix: "/proxy"}
+	res, err := svc.Search(context.Background(), src, SearchParams{Page: 1, Limit: 10})
+	if err != nil || len(res.Items) != 1 || res.Items[0].ID != "RefinedPower" || res.Items[0].LatestVersion != "2026.3.28" {
+		t.Fatalf("unexpected ficsit search: %#v err=%v", res, err)
+	}
+	det, err := svc.Detail(context.Background(), src, "RefinedPower", "")
+	if err != nil || !slices.Equal(det.AvailableVersions, []string{"2026.3.28"}) || len(det.Dependencies) != 1 || det.Dependencies[0].ID != "SML" {
+		t.Fatalf("expected only LinuxServer versions & non-optional SML dep, got %#v err=%v", det, err)
+	}
+	rel, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "RefinedPower", Version: "latest"})
+	if err != nil || rel.ArchiveFormat != ArchiveFormatZip || !strings.HasPrefix(rel.DownloadURL, srv.URL+"/v1/version/v1/LinuxServer/download") || !strings.HasSuffix(rel.FileName, ".smod") {
+		t.Fatalf("unexpected ficsit release: %#v err=%v", rel, err)
+	}
+}
+
+func TestCS2PluginsAndWorkshopMapTags(t *testing.T) {
+	toks := ParseInputTokens(ProviderCS2Plugins, "metamod, https://github.com/abnerfs/cs2-rockthevote, roflmuffin/CounterStrikeSharp")
+	if !slices.Equal(toks, []string{"abnerfs--cs2-rockthevote", "metamod", "counterstrikesharp"}) {
+		t.Fatalf("unexpected cs2plugins tokens: %#v", toks)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/mmsource-latest-linux":
+			_, _ = w.Write([]byte("mmsource-2.0.0-git1491-linux.tar.gz\n"))
+		case "/repos/roflmuffin/CounterStrikeSharp/releases":
+			_, _ = w.Write([]byte(`[{"tag_name":"v1.0.380","assets":[{"name":"counterstrikesharp-linux-1.0.380.zip","browser_download_url":"https://dl/no-rt.zip","size":10},{"name":"counterstrikesharp-with-runtime-linux-1.0.380.zip","browser_download_url":"https://dl/css-rt.zip","size":52}]}]`))
+		case "/repos/shobhit-pathak/MatchZy/releases":
+			_, _ = w.Write([]byte(`[{"tag_name":"0.9.3","assets":[{"name":"MatchZy-0.9.3-with-cssharp-linux.zip","browser_download_url":"https://dl/mz-bundle.zip","size":70},{"name":"MatchZy-0.9.3.zip","browser_download_url":"https://dl/mz.zip","size":17}]}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	svc := New(&unitTestCache{data: make(map[string]string)}, Options{SigningSecret: "sec"})
+	src := Source{Provider: ProviderCS2Plugins, Endpoint: srv.URL, Format: FormatCS2Plugin}
+	mms, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "metamod", Version: "latest"})
+	if err != nil || mms.Version != "2.0.0-git1491" || mms.ArchiveFormat != ArchiveFormatTarGz {
+		t.Fatalf("unexpected metamod release: %#v err=%v", mms, err)
+	}
+	css, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "counterstrikesharp"})
+	if err != nil || css.FileName != "counterstrikesharp-with-runtime-linux-1.0.380.zip" || len(css.Dependencies) != 1 || css.Dependencies[0].ID != "metamod" {
+		t.Fatalf("unexpected css release: %#v err=%v", css, err)
+	}
+	mz, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "shobhit-pathak--MatchZy"})
+	if err != nil || mz.FileName != "MatchZy-0.9.3.zip" {
+		t.Fatalf("expected MatchZy standalone plugin zip without cssharp bundle, got %#v err=%v", mz, err)
+	}
+	q := steam.BuildQueryParams("k", SteamAppCS2, SearchParams{Query: "mirage", Page: 1, Limit: 10})
+	if q.Get("requiredtags[0]") != "Map" {
+		t.Fatalf("expected CS2 Steam Workshop query to filter Map tag, got %v", q)
 	}
 }

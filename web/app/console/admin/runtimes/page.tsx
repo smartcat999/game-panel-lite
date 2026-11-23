@@ -755,6 +755,8 @@ function AdminRuntimesInner() {
                 repository: appAddonBinding.repository.trim(),
                 installMode: appAddonBinding.installMode || "flat_dir",
                 targetDir: appAddonBinding.targetDir.trim(),
+                ...(appAddonBinding.label?.trim() ? { label: appAddonBinding.label.trim() } : {}),
+                ...(appAddonBinding.additional?.length ? { additional: appAddonBinding.additional } : {}),
               }
             : undefined,
         resources: {

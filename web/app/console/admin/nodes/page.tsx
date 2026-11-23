@@ -111,7 +111,7 @@ function resolveCachedRepoInfo(
     if (app.serverBinding?.repository === cleanRepo) {
       return { appName: app.displayName || app.metadata.name, kindLabel: "游戏" };
     }
-    if (app.addonBinding?.repository === cleanRepo) {
+    if (app.addonBinding?.repository === cleanRepo || (app.addonBinding?.additional || []).some((sub) => sub.repository === cleanRepo)) {
       return { appName: app.displayName || app.metadata.name, kindLabel: "模组" };
     }
   }

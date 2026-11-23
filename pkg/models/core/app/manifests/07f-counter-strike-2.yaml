@@ -7,7 +7,7 @@ metadata:
     gamepanel.io/category: fps
 displayName: 反恐精英 2 Counter-Strike 2
 tagline: 团队竞技射击对战 · 满十内战与跑图练习专用服
-summary: 支持竞技/搭档/休闲/死斗模式、回合数与初始资金调节、电脑机器人配置、跑图练习开关及远程控制台赛事指令。
+summary: 支持 Metamod / CounterStrikeSharp 服务端插件、Steam 创意工坊地图挂载、竞技/搭档/休闲/死斗模式及远程控制台赛事指令。
 category: fps
 coverImage: /landing/games/counter-strike-2.jpg
 image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
@@ -33,6 +33,16 @@ serverBinding:
   repository: cs2-server
   package: cs2
   targetPath: .
+addonBinding:
+  repository: cs2-plugins
+  installMode: cs2_plugin
+  targetDir: game/csgo/addons
+  label: 服务端插件
+  additional:
+  - repository: cs2-workshop
+    installMode: cs2_workshop
+    targetDir: game/csgo/addons/workshop
+    label: 创意工坊地图
 env:
   HOSTNAME: GamePanel 竞技训练服
   SV_PASSWORD: ''
@@ -109,8 +119,9 @@ configSchema:
   default: de_mirage
   envKey: START_MAP
   group: 基础设置
-  help: 服务器启动后默认加载的竞技图池地图
+  help: 服务器启动后默认加载的竞技图池地图（安装创意工坊地图后也会自动出现在可选列表中）
   fileTarget: game/csgo/cfg/server.cfg
+  optionsSource: addon_maps
   options:
   - value: de_mirage
     label: 荒漠迷城
@@ -328,7 +339,7 @@ fileTemplates:
       type: "rcon"
 preStartCommand: |
   chmod +x /data/game/cs2.sh /data/game/bin/linuxsteamrt64/cs2 2>/dev/null || true
-  mkdir -p /data/game/csgo/cfg /data/.steam/sdk64 /home/steam/.steam/sdk64
+  mkdir -p /data/game/csgo/cfg /data/game/csgo/addons /data/game/csgo/addons/workshop /data/.steam/sdk64 /home/steam/.steam/sdk64
   if [ -L /data/game/bin/linuxsteamrt64/steamclient.so ]; then
     rm -f /data/game/bin/linuxsteamrt64/steamclient.so
   fi
@@ -339,7 +350,8 @@ preStartCommand: |
       cp -f /opt/steamcmd/linux64/steamclient.so /data/game/bin/linuxsteamrt64/steamclient.so 2>/dev/null || true
     fi
   fi
-  chown -R 1000:1000 /data/game/csgo/cfg /data/.steam
+  chown -R 1000:1000 /data/game/csgo/cfg /data/game/csgo/addons /data/.steam
+  [ -f /data/game/csgo/gameinfo.gi ] && chown 1000:1000 /data/game/csgo/gameinfo.gi || true
 startupCommand: |
   cfg_val() {
     [ -f /data/game/csgo/cfg/server.cfg ] && sed -n "s|.*$1=\([^| )]*\).*|\1|p" /data/game/csgo/cfg/server.cfg | head -n1 || true
@@ -354,8 +366,14 @@ startupCommand: |
     deathmatch) GT=1; GM=2 ;;
     *) GT=0; GM=1 ;;
   esac
+  WS_MAP=""
+  case "$MAP" in
+    workshop:[0-9]*) WS_MAP="${MAP#workshop:}"; MAP="de_mirage" ;;
+    [0-9]*) case "$MAP" in *[!0-9]*) ;; *) WS_MAP="$MAP"; MAP="de_mirage" ;; esac ;;
+  esac
   export LD_LIBRARY_PATH="/data/game/bin/linuxsteamrt64:${LD_LIBRARY_PATH:-}"
   set -- /data/game/bin/linuxsteamrt64/cs2 -dedicated -usercon -ip 0.0.0.0 -port 27015 -maxplayers "$MAXP" +game_type "$GT" +game_mode "$GM" +map "$MAP" +exec server.cfg
+  [ -n "$WS_MAP" ] && set -- "$@" +host_workshop_map "$WS_MAP"
   [ -n "$GSLT" ] && set -- "$@" +sv_setsteamaccount "$GSLT"
   exec runuser -u steam -- env HOME=/data LD_LIBRARY_PATH="$LD_LIBRARY_PATH" "$@"
 preStopCommand: |
@@ -421,6 +439,24 @@ consoleActions:
   - name: player
     label: 玩家昵称
     type: text
+- id: cs2-workshop-map
+  title: 切换创意工坊地图
+  group: 赛事控制
+  command: host_workshop_map {{workshopId}}
+  starred: true
+  params:
+  - name: workshopId
+    label: 工坊地图
+    type: select
+    optionsSource: addon_maps
+- id: cs2-meta-list
+  title: 查看 Metamod 插件
+  group: 插件管理
+  command: meta list
+- id: cs2-css-plugins
+  title: 查看 CounterStrikeSharp 插件
+  group: 插件管理
+  command: css_plugins list
 storagePolicy:
   backupSubtree: game/csgo/cfg
   replaceOnRestore: true

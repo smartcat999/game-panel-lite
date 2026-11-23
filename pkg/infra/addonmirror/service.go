@@ -66,6 +66,7 @@ func NewForRegistry(c cache.Interface, regCfg config.RegistryConfig, p RegistryP
 		Provider:            p.Provider,
 		Endpoint:            strings.TrimSpace(p.Endpoint),
 		Format:              p.Format,
+		APIKey:              strings.TrimSpace(p.APIKey),
 		SteamAppID:          p.SteamAppID,
 		ModrinthLoader:      p.ModrinthLoader,
 		ModrinthProjectType: p.ModrinthProjectType,
@@ -210,7 +211,12 @@ func (s *Service) imageHTTPClient() *http.Client {
 
 // DoGetJSON performs a GET request expecting JSON, retrying up to 3 attempts on transient network or 5xx failure.
 func (s *Service) DoGetJSON(ctx context.Context, endpoint string, dst any) error {
-	body, err := s.doGetWithRetry(ctx, endpoint, "application/json")
+	return s.DoGetJSONWithHeaders(ctx, endpoint, nil, dst)
+}
+
+// DoGetJSONWithHeaders performs a GET request with optional HTTP headers and decodes the JSON response into dst.
+func (s *Service) DoGetJSONWithHeaders(ctx context.Context, endpoint string, headers map[string]string, dst any) error {
+	body, err := s.doGetWithRetry(ctx, endpoint, "application/json", headers)
 	if err != nil {
 		return err
 	}
@@ -219,17 +225,17 @@ func (s *Service) DoGetJSON(ctx context.Context, endpoint string, dst any) error
 
 // DoGetBytes performs a GET request returning raw bytes, retrying up to 3 attempts on transient network or 5xx failure.
 func (s *Service) DoGetBytes(ctx context.Context, endpoint string) ([]byte, error) {
-	return s.doGetWithRetry(ctx, endpoint, "*/*")
+	return s.doGetWithRetry(ctx, endpoint, "*/*", nil)
 }
 
-func (s *Service) doGetWithRetry(ctx context.Context, endpoint, accept string) ([]byte, error) {
+func (s *Service) doGetWithRetry(ctx context.Context, endpoint, accept string, headers map[string]string) ([]byte, error) {
 	var (
 		body []byte
 		err  error
 	)
 	for attempt := range maxJSONGetAttempts {
 		var retry bool
-		body, retry, err = s.doGetOnce(ctx, endpoint, accept)
+		body, retry, err = s.doGetOnce(ctx, endpoint, accept, headers)
 		if err == nil || !retry || attempt+1 >= maxJSONGetAttempts || ctx.Err() != nil {
 			return body, err
 		}
@@ -245,13 +251,18 @@ func (s *Service) doGetWithRetry(ctx context.Context, endpoint, accept string) (
 	return body, err
 }
 
-func (s *Service) doGetOnce(ctx context.Context, endpoint, accept string) ([]byte, bool, error) {
+func (s *Service) doGetOnce(ctx context.Context, endpoint, accept string, headers map[string]string) ([]byte, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, false, err
 	}
 	req.Header.Set("User-Agent", defaultUserAgent)
 	req.Header.Set("Accept", accept)
+	for k, v := range headers {
+		if strings.TrimSpace(k) != "" && strings.TrimSpace(v) != "" {
+			req.Header.Set(k, v)
+		}
+	}
 	resp, err := s.httpClient().Do(req)
 	if err != nil {
 		return nil, true, sanitizeUpstreamHTTPError(endpoint, err)
@@ -307,6 +318,33 @@ func (s *Service) DoPostFormJSON(ctx context.Context, endpoint string, form url.
 		return sanitizeUpstreamHTTPError(endpoint, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("upstream status %d", resp.StatusCode)
+	}
+	return json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(dst)
+}
+
+// DoPostJSON sends a JSON POST request and decodes the JSON response into dst.
+func (s *Service) DoPostJSON(ctx context.Context, endpoint string, body, dst any) error {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", defaultUserAgent)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := s.httpClient().Do(req)
+	if err != nil {
+		return sanitizeUpstreamHTTPError(endpoint, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrNotFound
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("upstream status %d", resp.StatusCode)
 	}

@@ -24,6 +24,12 @@ export interface AddonBindingMeta {
   browseActionLabel: string;
 }
 
+/** Flatten primary and any additional AppAddonBinding entries into a uniform array. */
+export function allAddonBindings(binding?: AppAddonBinding): AppAddonBinding[] {
+  if (!binding) return [];
+  return [binding, ...(binding.additional || [])].filter((b) => Boolean(b.repository?.trim()));
+}
+
 /** Derive UI labels uniformly from an App's addonBinding metadata rather than hardcoding app names. */
 export function addonBindingMeta(binding?: AppAddonBinding): AddonBindingMeta {
   const repo = (binding?.repository || "").trim().toLowerCase();
@@ -34,8 +40,12 @@ export function addonBindingMeta(binding?: AppAddonBinding): AddonBindingMeta {
     repo.includes("workshop") ||
     mode === "tmod_latest" ||
     mode === "dst_local_mods" ||
-    mode === "workshop_tree";
-  const isPlugin = !isSteam && (mode === "" || mode === "flat_dir" || mode === "oxide") && targetLeaf !== "mods";
+    mode === "workshop_tree" ||
+    mode === "cs2_workshop";
+  const isPlugin =
+    !isSteam &&
+    (mode === "" || mode === "flat_dir" || mode === "oxide" || mode === "cs2_plugin") &&
+    targetLeaf !== "mods";
   const noun = isPlugin ? "插件" : "模组";
   const marketLabel = isSteam ? "创意工坊" : isPlugin ? "插件市场" : "模组市场";
   return {

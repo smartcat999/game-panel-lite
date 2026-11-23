@@ -341,6 +341,36 @@ func TestBuiltInMinecraftFabricBindingRender(t *testing.T) {
 	assertBuiltInMinecraftNeoForgeBindingRender(t, byName["minecraft-neoforge"])
 	assertBuiltInValheimBepInExBindingRender(t, byName["valheim-dedicated"])
 	assertBuiltInRustOxideBindingRender(t, byName["rust-dedicated"])
+	assertBuiltInSatisfactoryAndCS2Bindings(t, byName["satisfactory-dedicated"], byName["counter-strike-2"])
+}
+
+func assertBuiltInSatisfactoryAndCS2Bindings(t *testing.T, sf, cs2 *corev1.App) {
+	t.Helper()
+	if sf == nil || sf.AddonBinding == nil || sf.AddonBinding.Repository != "satisfactory-ficsit" ||
+		sf.AddonBinding.InstallMode != corev1.AddonInstallModeSML || sf.AddonBinding.TargetDir != "FactoryGame/Mods" {
+		t.Fatalf("unexpected satisfactory-dedicated AddonBinding: %+v", sf)
+	}
+	if cs2 == nil || cs2.AddonBinding == nil || cs2.AddonBinding.Repository != "cs2-plugins" ||
+		cs2.AddonBinding.InstallMode != corev1.AddonInstallModeCS2Plugin || len(cs2.AddonBinding.Additional) != 1 ||
+		cs2.AddonBinding.Additional[0].Repository != "cs2-workshop" || cs2.AddonBinding.Additional[0].InstallMode != corev1.AddonInstallModeCS2Workshop {
+		t.Fatalf("unexpected counter-strike-2 dual AddonBinding: %+v", cs2)
+	}
+	cs2Inst := &corev1.Instance{
+		Metadata: metav1.ObjectMeta{Name: "cs2-multi-binding", Annotations: map[string]string{AnnotationAppConfig: `{"startMap":"3070244462"}`}},
+		Spec: corev1.InstanceSpec{
+			Addons: []corev1.InstanceAddon{
+				{Repository: "cs2-plugins", Package: "metamod", Version: "2.0.0-git1491"},
+				{Repository: "cs2-workshop", Package: "3070244462", Version: "1"},
+			},
+		},
+	}
+	if err := RenderInstanceSpec(cs2, cs2Inst); err != nil {
+		t.Fatalf("RenderInstanceSpec(cs2 multi-binding): %v", err)
+	}
+	if cs2Inst.Spec.Addons[0].InstallMode != corev1.AddonInstallModeCS2Plugin || cs2Inst.Spec.Addons[0].TargetDir != "game/csgo/addons" ||
+		cs2Inst.Spec.Addons[1].InstallMode != corev1.AddonInstallModeCS2Workshop || cs2Inst.Spec.Addons[1].TargetDir != "game/csgo/addons/workshop" {
+		t.Fatalf("unexpected normalized multi-binding CS2 addons: %+v", cs2Inst.Spec.Addons)
+	}
 }
 
 func assertBuiltInRustOxideBindingRender(t *testing.T, rust *corev1.App) {

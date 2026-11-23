@@ -239,6 +239,9 @@ func BuildQueryParams(apiKey string, appID int, params driver.SearchParams) url.
 	q.Set("return_short_description", "true")
 	q.Set("return_details", "true")
 	q.Set("language", "6") // Simplified Chinese localization when provided by author
+	if appID == driver.SteamAppCS2 {
+		q.Set("requiredtags[0]", "Map")
+	}
 	if trimmed := strings.TrimSpace(params.Query); trimmed != "" {
 		q.Set("search_text", trimmed)
 		q.Set("query_type", "12") // RankedByTextSearch (Steam ignores search_text under query_type=9)

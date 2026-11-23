@@ -7,7 +7,7 @@ metadata:
     gamepanel.io/category: sandbox
 displayName: 幸福工厂 Satisfactory
 tagline: 第一人称自动化工厂建设 · 多人协同流水线联机服
-summary: 支持服务器名称与存档会话配置、无人在线自动暂停、自动存盘间隔与保留份数、网络同步带宽与服务端帧率调优。
+summary: 支持 ficsit.app / SML 模组生态、服务器名称与存档会话配置、无人在线自动暂停、自动存盘间隔与保留份数、网络同步带宽与服务端帧率调优。
 category: sandbox
 coverImage: /landing/games/satisfactory-dedicated.jpg
 image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
@@ -30,6 +30,10 @@ serverBinding:
   repository: satisfactory-server
   package: satisfactory
   targetPath: .
+addonBinding:
+  repository: satisfactory-ficsit
+  installMode: sml
+  targetDir: FactoryGame/Mods
 env:
   SERVER_NAME: GamePanel 幸福工厂服
   SESSION_NAME: SatisfactoryFactory
@@ -198,7 +202,7 @@ fileTemplates:
     NetServerMaxTickRate={{tickRate}}
 preStartCommand: |
   chmod +x /data/FactoryServer.sh /data/Engine/Binaries/Linux/FactoryServer-Linux-Shipping 2>/dev/null || true
-  mkdir -p /data/FactoryGame/Saved/SaveGames/server /data/FactoryGame/Saved/Config/LinuxServer /data/.steam/sdk64 /home/steam/.steam/sdk64
+  mkdir -p /data/FactoryGame/Saved/SaveGames/server /data/FactoryGame/Saved/Config/LinuxServer /data/FactoryGame/Mods /data/FactoryGame/Configs /data/.steam/sdk64 /home/steam/.steam/sdk64
   if [ -f /opt/steamcmd/linux64/steamclient.so ]; then
     ln -sf /opt/steamcmd/linux64/steamclient.so /data/.steam/sdk64/steamclient.so
     ln -sf /opt/steamcmd/linux64/steamclient.so /home/steam/.steam/sdk64/steamclient.so

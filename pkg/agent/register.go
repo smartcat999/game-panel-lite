@@ -5,9 +5,12 @@ import (
 
 	// Self-register built-in addon injectors for each corev1.AddonInstallMode.
 	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/bepinex"
+	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/cs2plugin"
+	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/cs2workshop"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/dst"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/flatdir"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/oxide"
+	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/sml"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/tmod"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/workshoptree"
 )

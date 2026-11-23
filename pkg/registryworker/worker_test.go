@@ -130,6 +130,8 @@ func TestLookupSyncDriverMatrix(t *testing.T) {
 		{name: "modrinth", provider: registryv1.UpstreamProviderModrinth, format: "mod", want: "http-release"},
 		{name: "thunderstore", provider: registryv1.UpstreamProviderThunderstore, format: registryv1.FormatThunderstoreMod, want: "http-release"},
 		{name: "umod", provider: registryv1.UpstreamProviderUMod, format: registryv1.FormatUModPlugin, want: "http-release"},
+		{name: "ficsit", provider: registryv1.UpstreamProviderFicsit, format: registryv1.FormatFicsitMod, want: "http-release"},
+		{name: "cs2plugins", provider: registryv1.UpstreamProviderCS2Plugins, format: registryv1.FormatCS2Plugin, want: "http-release"},
 		{name: "papermc", provider: registryv1.UpstreamProviderPaperMC, format: "jar", want: "http-release"},
 		{name: "fabricmc", provider: registryv1.UpstreamProviderFabricMC, format: registryv1.FormatServerPackage, want: "fabricmc-bundle"},
 		{name: "neoforge", provider: registryv1.UpstreamProviderNeoForge, format: registryv1.FormatServerPackage, want: "neoforge-bundle"},

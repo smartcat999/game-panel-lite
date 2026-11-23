@@ -78,7 +78,24 @@ function parseAddonInput(raw: string): string {
   if (umodPluginMatch) return umodPluginMatch[1].replace(/\.(json|cs)$/i, "");
   const umodGameMatch = trimmed.match(/umod\.org\/games\/([^\s,;/?#"<>]+)/i);
   if (umodGameMatch) return `oxide-${umodGameMatch[1].replace(/\.json$/i, "").toLowerCase()}`;
+  const ficsitMatch = trimmed.match(/ficsit\.app\/mod\/([^\s,;/?#"<>]+)/i);
+  if (ficsitMatch) return ficsitMatch[1];
+  const ghMatch = trimmed.match(/github\.com\/([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)/i);
+  if (ghMatch) {
+    const owner = ghMatch[1];
+    const repo = ghMatch[2].replace(/\.git$/i, "");
+    if (owner.toLowerCase() === "roflmuffin" && repo.toLowerCase() === "counterstrikesharp") {
+      return "counterstrikesharp";
+    }
+    return `${owner}--${repo}`;
+  }
   return trimmed;
+}
+
+function appHasAddonRepo(app: AppItem | undefined, repo: string): boolean {
+  if (!app?.addonBinding || !repo) return false;
+  if (app.addonBinding.repository === repo) return true;
+  return (app.addonBinding.additional || []).some((sub) => sub.repository === repo);
 }
 
 function cleanRepoDisplayTitle(repo?: RegistryRepository, fallback?: string): string {
@@ -255,6 +272,9 @@ export default function AdminRegistryPage() {
     for (const a of apps) {
       if (a.serverBinding?.repository) m.set(a.serverBinding.repository, a);
       if (a.addonBinding?.repository) m.set(a.addonBinding.repository, a);
+      for (const sub of a.addonBinding?.additional || []) {
+        if (sub.repository) m.set(sub.repository, a);
+      }
     }
     return m;
   }, [apps]);
@@ -375,7 +395,7 @@ export default function AdminRegistryPage() {
       const isGamePkg =
         repo?.spec.format === "server_package" ||
         (ownerApp?.serverBinding?.repository === repository &&
-          ownerApp?.addonBinding?.repository !== repository);
+          !appHasAddonRepo(ownerApp, repository));
       const isLocalUpload = sorted.every(
         (art) =>
           repo?.spec.mode === "Hosted" ||
@@ -799,7 +819,7 @@ export default function AdminRegistryPage() {
     const isGamePkg =
       repo?.spec.format === "server_package" ||
       (ownerApp?.serverBinding?.repository === art.spec.repository &&
-        ownerApp?.addonBinding?.repository !== art.spec.repository);
+        !appHasAddonRepo(ownerApp, art.spec.repository));
     const isFailed = art.status?.phase === "Failed";
 
     setBusyCoord(coord);
@@ -1545,9 +1565,9 @@ export default function AdminRegistryPage() {
                   }
                 >
                   <Field
-                    label="模组编号 / 链接"
+                    label="模组 / 插件编号或链接"
                     htmlFor="prepull-addon-id"
-                    hint="支持 Steam 创意工坊编号、链接或 Modrinth 项目标识"
+                    hint="支持 Steam 创意工坊、Modrinth、ficsit.app 或 GitHub 插件仓库链接"
                   >
                     <Input
                       id="prepull-addon-id"

@@ -402,14 +402,15 @@ func renderInstanceArtifactBindings(appObj *corev1.App, inst *corev1.Instance, v
 	}
 	if ab := appObj.AddonBinding; ab != nil {
 		for i := range inst.Spec.Addons {
+			matched := ab.ForRepository(inst.Spec.Addons[i].Repository)
 			if strings.TrimSpace(inst.Spec.Addons[i].Repository) == "" {
-				inst.Spec.Addons[i].Repository = strings.TrimSpace(ab.Repository)
+				inst.Spec.Addons[i].Repository = strings.TrimSpace(matched.Repository)
 			}
 			if strings.TrimSpace(inst.Spec.Addons[i].InstallMode) == "" {
-				inst.Spec.Addons[i].InstallMode = strings.TrimSpace(ab.InstallMode)
+				inst.Spec.Addons[i].InstallMode = strings.TrimSpace(matched.InstallMode)
 			}
 			if strings.TrimSpace(inst.Spec.Addons[i].TargetDir) == "" {
-				inst.Spec.Addons[i].TargetDir = strings.TrimSpace(ab.TargetDir)
+				inst.Spec.Addons[i].TargetDir = strings.TrimSpace(matched.TargetDir)
 			}
 		}
 	}

@@ -88,10 +88,13 @@ func defaultBuiltInUpstreams() []*registryv1.Upstream {
 		{Metadata: metav1.ObjectMeta{Name: "modrinth-neoforge"}, Provider: registryv1.UpstreamProviderModrinth, Endpoint: "https://api.modrinth.com/v2", ModrinthLoader: registryv1.ModrinthLoaderNeoForge, ModrinthProjectType: registryv1.ModrinthProjectMod},
 		{Metadata: metav1.ObjectMeta{Name: "thunderstore-valheim"}, Provider: registryv1.UpstreamProviderThunderstore, Endpoint: "https://thunderstore.io/c/valheim"},
 		{Metadata: metav1.ObjectMeta{Name: "umod-rust"}, Provider: registryv1.UpstreamProviderUMod, Endpoint: "https://umod.org/games/rust"},
+		{Metadata: metav1.ObjectMeta{Name: "ficsit-satisfactory"}, Provider: registryv1.UpstreamProviderFicsit, Endpoint: "https://api.ficsit.app/v2/query"},
+		{Metadata: metav1.ObjectMeta{Name: "cs2plugins-github"}, Provider: registryv1.UpstreamProviderCS2Plugins, Endpoint: "https://api.github.com"},
 		{Metadata: metav1.ObjectMeta{Name: "steam-tmodloader-workshop"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 1281930},
 		{Metadata: metav1.ObjectMeta{Name: "steam-pz-workshop"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 108600},
 		{Metadata: metav1.ObjectMeta{Name: "steam-dst-workshop"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 322330},
 		{Metadata: metav1.ObjectMeta{Name: "steam-l4d2-workshop"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 550},
+		{Metadata: metav1.ObjectMeta{Name: "steam-cs2-workshop"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 730},
 	}
 }
 
@@ -117,10 +120,13 @@ func defaultBuiltInRepositories() []*registryv1.Repository {
 		proxyRepo("mc-neoforge-mods", "Minecraft NeoForge 模组镜像", registryv1.FormatModrinthAddon, "modrinth-neoforge"),
 		proxyRepo("valheim-thunderstore", "英灵神殿 Thunderstore 模组库", registryv1.FormatThunderstoreMod, "thunderstore-valheim"),
 		proxyRepo("rust-umod", "腐蚀 Rust uMod/Oxide 插件库", registryv1.FormatUModPlugin, "umod-rust"),
+		proxyRepo("satisfactory-ficsit", "幸福工厂 ficsit.app 模组库", registryv1.FormatFicsitMod, "ficsit-satisfactory"),
+		proxyRepo("cs2-plugins", "CS2 Metamod / CounterStrikeSharp 插件库", registryv1.FormatCS2Plugin, "cs2plugins-github"),
 		proxyRepo("tmodloader-workshop", "泰拉瑞亚 tModLoader 创意工坊", registryv1.FormatWorkshopMod, "steam-tmodloader-workshop"),
 		proxyRepo("pz-workshop", "僵尸毁灭工程创意工坊", registryv1.FormatWorkshopMod, "steam-pz-workshop"),
 		proxyRepo("dst-workshop", "饥荒联机版创意工坊", registryv1.FormatWorkshopMod, "steam-dst-workshop"),
 		proxyRepo("l4d2-workshop", "求生之路 2 创意工坊", registryv1.FormatWorkshopMod, "steam-l4d2-workshop"),
+		proxyRepo("cs2-workshop", "反恐精英 2 创意工坊地图", registryv1.FormatWorkshopMod, "steam-cs2-workshop"),
 	}
 }
 

@@ -1,5 +1,5 @@
 import type { AppItem, InstanceItem } from "../../../console/lib/types";
-import { addonBindingMeta } from "./shared";
+import { addonBindingMeta, allAddonBindings } from "./shared";
 
 export type InstanceBannerKind =
   | "suspended"
@@ -36,14 +36,16 @@ function humanizeArtifactSyncError(
     const matchedAddon = inst.spec.addons?.find(
       (a) => a.repository === fRepo && a.package === fPkg,
     );
-    if (matchedAddon || (matchedApp?.addonBinding?.repository && matchedApp.addonBinding.repository === fRepo)) {
+    const matchedBinding = allAddonBindings(matchedApp?.addonBinding).find((b) => b.repository === fRepo);
+    if (matchedAddon || matchedBinding) {
       const displayTitle =
         matchedAddon?.title && matchedAddon.title !== fPkg ? `《${matchedAddon.title}》` : `（${fPkg}）`;
+      const meta = addonBindingMeta(matchedBinding || matchedApp?.addonBinding);
       return {
         kind: "artifact",
         isError: true,
-        title: `${addonTabLabel}${displayTitle}下载未完成，服务器暂未启动`,
-        desc: `连接${addonBindingMeta(matchedApp?.addonBinding).marketLabel}超时或网络受限，可前往「${addonTabLabel}」列表点击重新下载，或移除该${addonTabLabel}后重新启动服务器。`,
+        title: `${meta.noun}${displayTitle}下载未完成，服务器暂未启动`,
+        desc: `连接${meta.marketLabel}超时或网络受限，可前往「${addonTabLabel}」列表点击重新下载，或移除该${addonTabLabel}后重新启动服务器。`,
       };
     }
     return {

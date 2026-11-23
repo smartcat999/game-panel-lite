@@ -342,6 +342,62 @@ func TestGetUModPersistedPackageEnrichesAvailableVersions(t *testing.T) {
 	}
 }
 
+func TestGetPersistedFicsitAndCS2ProxyPackageOverlaysLiveVersions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v2/query":
+			_, _ = w.Write([]byte(`{"data":{"getModByIdOrReference":{"id":"id1","mod_reference":"InfiniteZoop","name":"Infinite Zoop","versions":[{"id":"v2","version":"1.11.2","targets":[{"targetName":"LinuxServer","link":"/v1/version/v2/LinuxServer/download","size":123}],"dependencies":[{"mod_id":"SML","condition":"^3.12.0","optional":false}]}]}}}`))
+		case "/repos/abnerfs/cs2-rockthevote/releases":
+			_, _ = w.Write([]byte(`[{"tag_name":"v1.8.5","assets":[{"name":"RockTheVote_v1.8.5.zip","browser_download_url":"https://dl/rtv.zip","size":500}]}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	fix := testpg.New(t, nil)
+	ctx := context.Background()
+	seedFicsitAndCS2ProxyPackages(t, ctx, fix, srv.URL)
+	op := NewOperator(fix.Registry, nil)
+	sfPkg, err := op.Get(ctx, "satisfactory-ficsit.InfiniteZoop")
+	if err != nil || sfPkg.LatestVersion != "1.11.2" || len(sfPkg.Dependencies) != 1 || sfPkg.Dependencies[0].Package != "SML" {
+		t.Fatalf("unexpected live ficsit package overlay: %+v err=%v", sfPkg, err)
+	}
+	cs2Pkg, err := op.Get(ctx, "cs2-plugins.abnerfs--cs2-rockthevote")
+	if err != nil || cs2Pkg.LatestVersion != "v1.8.5" || len(cs2Pkg.Dependencies) != 1 || cs2Pkg.Dependencies[0].Package != "counterstrikesharp" {
+		t.Fatalf("unexpected live cs2 plugin overlay: %+v err=%v", cs2Pkg, err)
+	}
+}
+
+func seedFicsitAndCS2ProxyPackages(t *testing.T, ctx context.Context, fix testpg.Fixture, endpoint string) {
+	t.Helper()
+	for _, up := range []*registryv1.Upstream{
+		{Metadata: metav1.ObjectMeta{Name: "up-ficsit"}, Provider: registryv1.UpstreamProviderFicsit, Endpoint: endpoint + "/v2/query"},
+		{Metadata: metav1.ObjectMeta{Name: "up-cs2p"}, Provider: registryv1.UpstreamProviderCS2Plugins, Endpoint: endpoint},
+	} {
+		if _, err := upstreamdb.NewDB(fix.Pool).Create(ctx, up); err != nil {
+			t.Fatalf("Create upstream: %v", err)
+		}
+	}
+	for _, repo := range []*registryv1.Repository{
+		{Metadata: metav1.ObjectMeta{Name: "satisfactory-ficsit"}, Spec: registryv1.RepositorySpec{Mode: registryv1.RepositoryModeProxy, Format: registryv1.FormatFicsitMod, UpstreamName: "up-ficsit"}},
+		{Metadata: metav1.ObjectMeta{Name: "cs2-plugins"}, Spec: registryv1.RepositorySpec{Mode: registryv1.RepositoryModeProxy, Format: registryv1.FormatCS2Plugin, UpstreamName: "up-cs2p"}},
+	} {
+		if _, err := repositorydb.NewDB(fix.Pool).Create(ctx, repo); err != nil {
+			t.Fatalf("Create repo: %v", err)
+		}
+	}
+	for _, pkg := range []*registryv1.Package{
+		{Metadata: metav1.ObjectMeta{Name: "satisfactory-ficsit.InfiniteZoop"}, Repository: "satisfactory-ficsit", Package: "InfiniteZoop", Title: "Infinite Zoop", LatestVersion: "1.0.0"},
+		{Metadata: metav1.ObjectMeta{Name: "cs2-plugins.abnerfs--cs2-rockthevote"}, Repository: "cs2-plugins", Package: "abnerfs--cs2-rockthevote", Title: "CS2 RTV", LatestVersion: "v1.0.0"},
+	} {
+		if _, err := pkgdb.NewDB(fix.Pool).Create(ctx, pkg); err != nil {
+			t.Fatalf("Create pkg: %v", err)
+		}
+	}
+}
+
 func seedUModProxyPackage(t *testing.T, ctx context.Context, fix testpg.Fixture, endpoint string) {
 	t.Helper()
 	if _, err := upstreamdb.NewDB(fix.Pool).Create(ctx, &registryv1.Upstream{

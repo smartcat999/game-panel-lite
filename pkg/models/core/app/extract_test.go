@@ -349,13 +349,23 @@ func TestExtractArchiveAddonsGenericModes(t *testing.T) {
 	}
 }
 
-func TestExtractArchiveAddonsOxideMode(t *testing.T) {
+func TestExtractArchiveAddonsOxideSMLAndCS2Modes(t *testing.T) {
 	rustApp := findBuiltInApp(t, "rust-dedicated")
 	rustAddons := ExtractArchiveAddons(rustApp, []string{"RustDedicated_Data/Managed/Oxide.Core.dll", "oxide/plugins/GatherManager.cs"}, nil)
 	if len(rustAddons) != 1 || rustAddons[0].Package != "GatherManager" ||
 		rustAddons[0].Repository != "rust-umod" || rustAddons[0].InstallMode != corev1.AddonInstallModeOxide ||
 		rustAddons[0].TargetDir != "oxide" {
 		t.Fatalf("unexpected Rust Oxide extracted plugins: %+v", rustAddons)
+	}
+	sfApp := findBuiltInApp(t, "satisfactory-dedicated")
+	sfAddons := ExtractArchiveAddons(sfApp, []string{"FactoryGame/Mods/SML/SML.uplugin", "FactoryGame/Mods/RefinedPower/RefinedPower.uplugin"}, nil)
+	if len(sfAddons) != 2 || sfAddons[0].Repository != "satisfactory-ficsit" || sfAddons[0].InstallMode != corev1.AddonInstallModeSML || sfAddons[1].Package != "RefinedPower" {
+		t.Fatalf("unexpected Satisfactory SML extracted mods: %+v", sfAddons)
+	}
+	cs2App := findBuiltInApp(t, "counter-strike-2")
+	cs2Addons := ExtractArchiveAddons(cs2App, []string{"game/csgo/addons/metamod/bin/metamod.2.csgo.so", "game/csgo/addons/counterstrikesharp/plugins/MatchZy/MatchZy.dll"}, nil)
+	if len(cs2Addons) != 2 || cs2Addons[0].Package != "metamod" || cs2Addons[1].Package != "MatchZy" || cs2Addons[1].InstallMode != corev1.AddonInstallModeCS2Plugin {
+		t.Fatalf("unexpected CS2 extracted plugins: %+v", cs2Addons)
 	}
 }
 

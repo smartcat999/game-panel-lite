@@ -15,6 +15,8 @@ const (
 	ProviderNeoForge      = driver.ProviderNeoForge
 	ProviderThunderstore  = driver.ProviderThunderstore
 	ProviderUMod          = driver.ProviderUMod
+	ProviderFicsit        = driver.ProviderFicsit
+	ProviderCS2Plugins    = driver.ProviderCS2Plugins
 	ProviderSteam         = driver.ProviderSteam
 	ProviderHTTP          = driver.ProviderHTTP
 	ProviderTerraria      = driver.ProviderTerraria
@@ -25,6 +27,8 @@ const (
 	FormatModrinthAddon   = driver.FormatModrinthAddon
 	FormatThunderstoreMod = driver.FormatThunderstoreMod
 	FormatUModPlugin      = driver.FormatUModPlugin
+	FormatFicsitMod       = driver.FormatFicsitMod
+	FormatCS2Plugin       = driver.FormatCS2Plugin
 	FormatGeneric         = driver.FormatGeneric
 
 	ArchiveFormatRaw   = driver.ArchiveFormatRaw
@@ -51,6 +55,7 @@ const (
 	SteamAppDontStarveTogether       = driver.SteamAppDontStarveTogether
 	SteamAppTModLoader               = driver.SteamAppTModLoader
 	SteamAppLeft4Dead2               = driver.SteamAppLeft4Dead2
+	SteamAppCS2                      = driver.SteamAppCS2
 	SteamServerAppPalworld           = driver.SteamServerAppPalworld
 	SteamServerAppProjectZomboid     = driver.SteamServerAppProjectZomboid
 	SteamServerAppDontStarveTogether = driver.SteamServerAppDontStarveTogether
@@ -68,6 +73,9 @@ const (
 	DefaultFabricServerMainClass       = driver.DefaultFabricServerMainClass
 	DefaultThunderstoreBaseURL         = driver.DefaultThunderstoreBaseURL
 	DefaultUModBaseURL                 = driver.DefaultUModBaseURL
+	DefaultFicsitBaseURL               = driver.DefaultFicsitBaseURL
+	DefaultMetamodBaseURL              = driver.DefaultMetamodBaseURL
+	DefaultGitHubAPIBaseURL            = driver.DefaultGitHubAPIBaseURL
 	maxProxiedImageBytes               = 8 << 20 // 8 MiB
 	maxCachedThumbnailBytes            = 256 << 10
 )

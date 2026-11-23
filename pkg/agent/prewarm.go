@@ -172,8 +172,8 @@ func buildAllowedReposMap(node *corev1.Node, apps []corev1.App) map[string]struc
 				allowed[repo] = struct{}{}
 			}
 		}
-		if app.AddonBinding != nil {
-			if repo := strings.TrimSpace(app.AddonBinding.Repository); repo != "" {
+		for _, binding := range app.AddonBinding.All() {
+			if repo := strings.TrimSpace(binding.Repository); repo != "" {
 				allowed[repo] = struct{}{}
 			}
 		}
@@ -190,8 +190,8 @@ func buildAgentRepoToAppMap(apps []corev1.App) map[string]string {
 				out[repo] = app.Metadata.Name
 			}
 		}
-		if app.AddonBinding != nil {
-			if repo := strings.TrimSpace(app.AddonBinding.Repository); repo != "" {
+		for _, binding := range app.AddonBinding.All() {
+			if repo := strings.TrimSpace(binding.Repository); repo != "" {
 				if _, exists := out[repo]; !exists {
 					out[repo] = app.Metadata.Name
 				}

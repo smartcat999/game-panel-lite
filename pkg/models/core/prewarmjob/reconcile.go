@@ -49,8 +49,8 @@ func BuildRepoToAppMap(apps []*corev1.App) map[string]string {
 				out[repoName] = a.Metadata.Name
 			}
 		}
-		if a.AddonBinding != nil {
-			if repoName := strings.TrimSpace(a.AddonBinding.Repository); repoName != "" {
+		for _, binding := range a.AddonBinding.All() {
+			if repoName := strings.TrimSpace(binding.Repository); repoName != "" {
 				if _, exists := out[repoName]; !exists {
 					out[repoName] = a.Metadata.Name
 				}

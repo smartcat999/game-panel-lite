@@ -65,6 +65,7 @@ import { AddonRichDescription } from "./AddonMarkdown";
 import { useServerActions } from "./api";
 import {
   addonBindingMeta,
+  allAddonBindings,
   INSTANCE_APP_VERSION_ANNOTATION,
   INSTANCE_RESTART_REQUESTED_AT_ANNOTATION,
 } from "./shared";
@@ -98,6 +99,8 @@ function looksLikeResolveInput(input: string, isSteam: boolean): boolean {
     trimmed.includes("modrinth.com/") ||
     trimmed.includes("thunderstore.io/") ||
     trimmed.includes("umod.org/") ||
+    trimmed.includes("ficsit.app/") ||
+    trimmed.includes("github.com/") ||
     /^workshop-\d+$/i.test(trimmed)
   ) {
     return true;
@@ -387,7 +390,12 @@ export function AddonsTab({
   const { busy, updateSpec } = useServerActions();
   const isUpdating = busy[inst.metadata.name] === "update";
 
-  const binding: AppAddonBinding | undefined = app.addonBinding;
+  const bindings = useMemo(() => allAddonBindings(app.addonBinding), [app.addonBinding]);
+  const [activeRepo, setActiveRepo] = useState("");
+  const binding: AppAddonBinding | undefined = useMemo(
+    () => bindings.find((b) => b.repository === activeRepo) || bindings[0],
+    [bindings, activeRepo],
+  );
   const repoName = binding?.repository || "";
   const { isSteam, noun, idLabel, marketLabel, browseActionLabel } = addonBindingMeta(binding);
 
@@ -418,21 +426,41 @@ export function AddonsTab({
     setStagedAddons(savedAddons);
   }, [inst.metadata.name, savedAddons, savedSig]);
 
+  const activeSavedAddons = useMemo(
+    () => savedAddons.filter((a) => !repoName || a.repository === repoName),
+    [savedAddons, repoName],
+  );
+
+  const activeStagedAddons = useMemo(
+    () => stagedAddons.filter((a) => !repoName || a.repository === repoName),
+    [stagedAddons, repoName],
+  );
+
+  const stagedCountByRepo = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const a of stagedAddons) {
+      if (a.repository) {
+        counts[a.repository] = (counts[a.repository] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [stagedAddons]);
+
   const savedMap = useMemo(() => {
     const m = new Map<string, InstanceAddon>();
-    for (const a of savedAddons) {
+    for (const a of activeSavedAddons) {
       m.set(a.package, a);
     }
     return m;
-  }, [savedAddons]);
+  }, [activeSavedAddons]);
 
   const stagedMap = useMemo(() => {
     const m = new Map<string, InstanceAddon>();
-    for (const a of stagedAddons) {
+    for (const a of activeStagedAddons) {
       m.set(a.package, a);
     }
     return m;
-  }, [stagedAddons]);
+  }, [activeStagedAddons]);
 
   const dirty = useMemo(
     () => serializeAddons(stagedAddons) !== savedSig,
@@ -440,9 +468,11 @@ export function AddonsTab({
   );
 
   const changedCount = useMemo(() => {
+    const fullSavedMap = new Map(savedAddons.map((a) => [`${a.repository}::${a.package}`, a]));
+    const fullStagedMap = new Map(stagedAddons.map((a) => [`${a.repository}::${a.package}`, a]));
     let diff = 0;
     for (const a of stagedAddons) {
-      const prev = savedMap.get(a.package);
+      const prev = fullSavedMap.get(`${a.repository}::${a.package}`);
       if (
         !prev ||
         prev.version !== a.version ||
@@ -453,10 +483,10 @@ export function AddonsTab({
       }
     }
     for (const a of savedAddons) {
-      if (!stagedMap.has(a.package)) diff++;
+      if (!fullStagedMap.has(`${a.repository}::${a.package}`)) diff++;
     }
     return Math.max(diff, dirty ? 1 : 0);
-  }, [stagedAddons, savedAddons, savedMap, stagedMap, dirty]);
+  }, [stagedAddons, savedAddons, dirty]);
 
   const phase = phaseOf(inst);
   const pendingRestart =
@@ -572,17 +602,21 @@ export function AddonsTab({
     setHydratedMap({});
     setVersionHydratedIds(new Set());
     setCatalogItems(null);
+    setBrowseQuery("");
+    setSubmittedQuery("");
+    setBrowsePage(1);
+    setDetailTargetId(null);
   }, [displayVersion, repoName]);
 
   // Hydrate installed package metadata via registry packages resolve
   const stagedPackageKey = useMemo(
-    () => stagedAddons.map((a) => a.package).join(","),
-    [stagedAddons],
+    () => activeStagedAddons.map((a) => a.package).join(","),
+    [activeStagedAddons],
   );
 
   useEffect(() => {
-    if (!repoName || stagedAddons.length === 0) return;
-    const missing = stagedAddons
+    if (!repoName || activeStagedAddons.length === 0) return;
+    const missing = activeStagedAddons
       .map((a) => a.package)
       .filter((pkg) => pkg && !versionHydratedIdsRef.current.has(pkg));
     if (missing.length === 0) return;
@@ -613,7 +647,7 @@ export function AddonsTab({
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, displayVersion, mergeHydratedPackages, repoName, stagedAddons, stagedPackageKey]);
+  }, [apiFetch, displayVersion, mergeHydratedPackages, repoName, activeStagedAddons, stagedPackageKey]);
 
   // Load artifacts for the bound repository to show sync state & cached sizes
   const loadRepoArtifacts = useCallback(async () => {
@@ -662,9 +696,9 @@ export function AddonsTab({
   );
 
   useEffect(() => {
-    if (!repoName || stagedAddons.length === 0) return;
+    if (!repoName || activeStagedAddons.length === 0) return;
     void loadRepoArtifacts();
-  }, [loadRepoArtifacts, repoName, stagedAddons.length, savedSig]);
+  }, [loadRepoArtifacts, repoName, activeStagedAddons.length, savedSig]);
 
   const artifactMap = useMemo(() => {
     const m = new Map<string, RegistryArtifact>();
@@ -959,7 +993,9 @@ export function AddonsTab({
 
         setStagedAddons((prev) => {
           const next = [...prev];
-          const existing = new Set(next.map((a) => a.package));
+          const existing = new Set(
+            next.filter((a) => a.repository === repoName).map((a) => a.package),
+          );
 
           for (const item of compatibleItems) {
             for (const dep of item.dependencies || []) {
@@ -1015,22 +1051,41 @@ export function AddonsTab({
     [apiFetch, binding, displayVersion, isSteam, mergeHydratedPackages, noun, repoName, stagedMap, toast],
   );
 
-  const updateAddonVersion = useCallback((pkgId: string, nextVersion: string) => {
-    if (!nextVersion) return;
-    setStagedAddons((prev) =>
-      prev.map((a) => (a.package === pkgId ? { ...a, version: nextVersion } : a)),
-    );
-  }, []);
+  const updateAddonVersion = useCallback(
+    (pkgId: string, nextVersion: string) => {
+      if (!nextVersion) return;
+      setStagedAddons((prev) =>
+        prev.map((a) =>
+          a.package === pkgId && (!repoName || a.repository === repoName)
+            ? { ...a, version: nextVersion }
+            : a,
+        ),
+      );
+    },
+    [repoName],
+  );
 
-  const removeAddon = useCallback((pkgId: string) => {
-    setStagedAddons((prev) => prev.filter((a) => a.package !== pkgId));
-  }, []);
+  const removeAddon = useCallback(
+    (pkgId: string) => {
+      setStagedAddons((prev) =>
+        prev.filter((a) => !(a.package === pkgId && (!repoName || a.repository === repoName))),
+      );
+    },
+    [repoName],
+  );
 
-  const toggleAddonEnabled = useCallback((pkgId: string, enabled: boolean) => {
-    setStagedAddons((prev) =>
-      prev.map((a) => (a.package === pkgId ? { ...a, disabled: !enabled } : a)),
-    );
-  }, []);
+  const toggleAddonEnabled = useCallback(
+    (pkgId: string, enabled: boolean) => {
+      setStagedAddons((prev) =>
+        prev.map((a) =>
+          a.package === pkgId && (!repoName || a.repository === repoName)
+            ? { ...a, disabled: !enabled }
+            : a,
+        ),
+      );
+    },
+    [repoName],
+  );
 
   const handleDirectResolveAndAdd = useCallback(
     async (rawInput: string): Promise<boolean> => {
@@ -1094,8 +1149,10 @@ export function AddonsTab({
 
   const handleSaveSchemaConfig = useCallback(
     async (pkgId: string, nextConfig: Record<string, string> | undefined): Promise<boolean> => {
+      const matchesTarget = (a: InstanceAddon) =>
+        a.package === pkgId && (!repoName || a.repository === repoName);
       const nextAddons = stagedAddons.map((a) => {
-        if (a.package !== pkgId) return a;
+        if (!matchesTarget(a)) return a;
         if (!nextConfig || Object.keys(nextConfig).length === 0) {
           const { config: _omit, ...rest } = a;
           void _omit;
@@ -1103,11 +1160,13 @@ export function AddonsTab({
         }
         return { ...a, config: nextConfig };
       });
+      const fullSavedMap = new Map(savedAddons.map((a) => [`${a.repository}::${a.package}`, a]));
+      const fullStagedMap = new Map(stagedAddons.map((a) => [`${a.repository}::${a.package}`, a]));
       const hasOtherStaged =
         stagedAddons.some((a) => {
-          const prev = savedMap.get(a.package);
+          const prev = fullSavedMap.get(`${a.repository}::${a.package}`);
           if (!prev) return true;
-          if (a.package === pkgId) {
+          if (matchesTarget(a)) {
             return prev.version !== a.version || Boolean(prev.disabled) !== Boolean(a.disabled);
           }
           return (
@@ -1115,7 +1174,7 @@ export function AddonsTab({
             Boolean(prev.disabled) !== Boolean(a.disabled) ||
             canonicalAddonConfig(prev.config) !== canonicalAddonConfig(a.config)
           );
-        }) || savedAddons.some((a) => !stagedMap.has(a.package));
+        }) || savedAddons.some((a) => !fullStagedMap.has(`${a.repository}::${a.package}`));
 
       setStagedAddons(nextAddons);
       if (hasOtherStaged) {
@@ -1135,14 +1194,14 @@ export function AddonsTab({
       }
       return ok;
     },
-    [inst, loadRepoArtifacts, noun, running, savedAddons, savedMap, stagedAddons, stagedMap, toast, updateSpec],
+    [inst, loadRepoArtifacts, noun, repoName, running, savedAddons, stagedAddons, toast, updateSpec],
   );
 
   const filterKeyword = filterQuery.trim().toLowerCase();
 
   const visibleAddons = useMemo(() => {
-    if (!filterKeyword) return stagedAddons;
-    return stagedAddons.filter((addon) => {
+    if (!filterKeyword) return activeStagedAddons;
+    return activeStagedAddons.filter((addon) => {
       const meta = hydratedMap[addon.package];
       if (addon.package.toLowerCase().includes(filterKeyword)) return true;
       if (addon.title?.toLowerCase().includes(filterKeyword)) return true;
@@ -1150,7 +1209,7 @@ export function AddonsTab({
       if (meta?.author?.toLowerCase().includes(filterKeyword)) return true;
       return false;
     });
-  }, [filterKeyword, hydratedMap, stagedAddons]);
+  }, [activeStagedAddons, filterKeyword, hydratedMap]);
 
   const closeBrowseModal = useCallback(() => {
     setDetailTargetId(null);
@@ -1243,7 +1302,7 @@ export function AddonsTab({
   const { incompatibleCount, fixableUpdates } = useMemo(() => {
     let count = 0;
     const updates = new Map<string, string>();
-    for (const addon of stagedAddons) {
+    for (const addon of activeStagedAddons) {
       const { incompatible, fixVersion } = addonCompatibility(addon);
       if (!incompatible) continue;
       count++;
@@ -1252,12 +1311,13 @@ export function AddonsTab({
       }
     }
     return { incompatibleCount: count, fixableUpdates: updates };
-  }, [addonCompatibility, stagedAddons]);
+  }, [activeStagedAddons, addonCompatibility]);
 
   const switchAllToCompatible = useCallback(() => {
     if (fixableUpdates.size === 0) return;
     setStagedAddons((prev) =>
       prev.map((a) => {
+        if (repoName && a.repository !== repoName) return a;
         const nextVer = fixableUpdates.get(a.package);
         return nextVer ? { ...a, version: nextVer } : a;
       }),
@@ -1266,7 +1326,7 @@ export function AddonsTab({
       "success",
       `已切换 ${fixableUpdates.size} 项${noun}至适配 ${displayVersion} 的版本，点击「保存更改」生效`,
     );
-  }, [displayVersion, fixableUpdates, noun, toast]);
+  }, [displayVersion, fixableUpdates, noun, repoName, toast]);
 
   if (!binding || !repoName) return null;
 
@@ -1319,19 +1379,41 @@ export function AddonsTab({
     <>
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EEF0F7] px-6 py-4">
-          <div className="flex items-baseline gap-2">
-            <h2 id={cardHeadingId} className="text-base font-semibold text-[#14161F]">
-              {noun}
-            </h2>
-            {stagedAddons.length > 0 && (
-              <span className="text-xs font-medium tabular-nums text-[#8A90A6]">
-                {stagedAddons.length}
-              </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-baseline gap-2">
+              <h2 id={cardHeadingId} className="text-base font-semibold text-[#14161F]">
+                {binding.label || noun}
+              </h2>
+              {activeStagedAddons.length > 0 && (
+                <span className="text-xs font-medium tabular-nums text-[#8A90A6]">
+                  {activeStagedAddons.length}
+                </span>
+              )}
+            </div>
+            {bindings.length > 1 && (
+              <Segmented
+                label="管理分类"
+                size="sm"
+                value={repoName}
+                onChange={(nextRepo) => {
+                  setActiveRepo(nextRepo);
+                  setFilterQuery("");
+                  setConfigTargetPkg(null);
+                }}
+                items={bindings.map((b) => {
+                  const count = stagedCountByRepo[b.repository] || 0;
+                  const lbl = b.label || addonBindingMeta(b).noun;
+                  return {
+                    value: b.repository,
+                    label: count > 0 ? `${lbl} (${count})` : lbl,
+                  };
+                })}
+              />
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {stagedAddons.length > 0 && (
+            {activeStagedAddons.length > 0 && (
               <search className="w-48 sm:w-60">
                 <form
                   aria-labelledby={cardHeadingId}
@@ -1453,7 +1535,7 @@ export function AddonsTab({
           </div>
         )}
 
-        {stagedAddons.length === 0 ? (
+        {activeStagedAddons.length === 0 ? (
           <EmptyState
             title={`暂未安装${noun}`}
             action={
@@ -1913,7 +1995,7 @@ export function AddonsTab({
             loading={detailLoading}
             noun={noun}
             idLabel={idLabel}
-            installedIds={new Set(stagedAddons.map((a) => a.package))}
+            installedIds={new Set(activeStagedAddons.map((a) => a.package))}
             pinnedVersion={detailStaged?.version}
             versionOptions={detailVersionOptions}
             compatibilityWarning={detailCompatWarning}
@@ -2199,7 +2281,7 @@ export function AddonsTab({
           noun={noun}
           idLabel={idLabel}
           hideTitle
-          installedIds={new Set(stagedAddons.map((a) => a.package))}
+          installedIds={new Set(activeStagedAddons.map((a) => a.package))}
           pinnedVersion={detailStaged?.version}
           versionOptions={detailVersionOptions}
           compatibilityWarning={detailCompatWarning}

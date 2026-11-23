@@ -229,6 +229,9 @@ func mapFileToItem(pf publishedFile, appID int) driver.Item {
 	if appID == driver.SteamAppProjectZomboid || pf.ConsumerAppID == driver.SteamAppProjectZomboid {
 		item.ModIDs, item.MapFolders = ExtractProjectZomboidMeta(rawDesc)
 	}
+	if (appID == driver.SteamAppCS2 || pf.ConsumerAppID == driver.SteamAppCS2) && pf.PublishedFileID != "" {
+		item.MapFolders = []string{pf.PublishedFileID}
+	}
 	return item
 }
 

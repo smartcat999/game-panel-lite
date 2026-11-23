@@ -453,8 +453,20 @@ export interface AppServerBinding {
 
 export interface AppAddonBinding {
   repository: string;
-  installMode: "flat_dir" | "tmod_latest" | "dst_local_mods" | "workshop_tree" | "bepinex" | "oxide" | string;
+  installMode:
+    | "flat_dir"
+    | "tmod_latest"
+    | "dst_local_mods"
+    | "workshop_tree"
+    | "bepinex"
+    | "oxide"
+    | "sml"
+    | "cs2_plugin"
+    | "cs2_workshop"
+    | string;
   targetDir: string;
+  label?: string;
+  additional?: AppAddonBinding[];
 }
 
 export interface AppItem {
@@ -531,7 +543,20 @@ export interface PrewarmJobItem {
 
 export interface RegistryUpstream {
   metadata: ObjectMeta;
-  provider: "papermc" | "purpur" | "vanilla" | "fabricmc" | "neoforge" | "modrinth" | "thunderstore" | "umod" | "steam" | "http" | string;
+  provider:
+    | "papermc"
+    | "purpur"
+    | "vanilla"
+    | "fabricmc"
+    | "neoforge"
+    | "modrinth"
+    | "thunderstore"
+    | "umod"
+    | "ficsit"
+    | "cs2plugins"
+    | "steam"
+    | "http"
+    | string;
   endpoint?: string;
   proxyURL?: string;
   steamAppId?: number;
@@ -552,7 +577,16 @@ export interface RegistryRepository {
     displayName?: string;
     description?: string;
     mode: "Hosted" | "Proxy" | "Virtual" | string;
-    format: "server_package" | "workshop_mod" | "modrinth_addon" | "thunderstore_mod" | "umod_plugin" | "generic" | string;
+    format:
+      | "server_package"
+      | "workshop_mod"
+      | "modrinth_addon"
+      | "thunderstore_mod"
+      | "umod_plugin"
+      | "ficsit_mod"
+      | "cs2_plugin"
+      | "generic"
+      | string;
     upstreamName?: string;
     memberRepos?: string[];
     publicRead?: boolean;

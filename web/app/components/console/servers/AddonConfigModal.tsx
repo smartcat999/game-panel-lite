@@ -150,8 +150,10 @@ export function AddonConfigModal({
   const isTMod = installMode === "tmod_latest";
   const isBepInEx = installMode === "bepinex";
   const isOxide = installMode === "oxide";
+  const isSML = installMode === "sml";
+  const isCS2Plugin = installMode === "cs2_plugin";
   const isFlatDir = installMode === "flat_dir" || installMode === "";
-  const isFileMode = schema.length === 0 && (isTMod || isBepInEx || isOxide || isFlatDir);
+  const isFileMode = schema.length === 0 && (isTMod || isBepInEx || isOxide || isSML || isCS2Plugin || isFlatDir);
 
   // ----------------------------- Schema Form State -----------------------------
   const [schemaDraft, setSchemaDraft] = useState<Record<string, string>>({});
@@ -285,7 +287,73 @@ export function AddonConfigModal({
             const low = name.toLowerCase();
             return lowerIds.some((id) => low === `${id}.json` || low.startsWith(`${id}_`));
           });
-        } else {
+        } else if (isSML) {
+        const configDir = "FactoryGame/Configs";
+        const res = await listDirIfPresent(listFiles, configDir);
+        const allCfgs = res.entries
+          .filter((e) => !e.isDir && isEditablePluginConfig(e.name))
+          .map((e) => e.name)
+          .sort((a, b) => a.localeCompare(b));
+        const pkgTok = normalizeToken(addon.package);
+        const titleTok = normalizeToken(displayTitle);
+        let hits = allCfgs.filter((name) => {
+          const tok = normalizeToken(name.replace(CONFIG_EXT_RE, ""));
+          if (!tok) return false;
+          if (pkgTok.length >= 2 && (tok === pkgTok || tok.includes(pkgTok) || pkgTok.includes(tok))) return true;
+          return titleTok.length >= 3 && (tok === titleTok || tok.includes(titleTok));
+        });
+        if (hits.length === 0 && allCfgs.length > 0) {
+          hits = allCfgs;
+          setFuzzyNotice(`未精确匹配到单一配置文件，已列出 ${configDir} 目录中的全部配置文件。`);
+        }
+        const paths = hits.map((name) => `${configDir}/${name}`);
+        setMatchedFiles(paths);
+        setSelectedFile((prev) => (prev && paths.includes(prev) ? prev : (paths[0] || "")));
+      } else if (isCS2Plugin) {
+        const baseDir = (addon.targetDir || "game/csgo/addons").replace(/^\/+|\/+$/g, "") || "game/csgo/addons";
+        const csgoRoot = baseDir.endsWith("/addons") ? baseDir.slice(0, -"/addons".length) : "game/csgo";
+        const cssConfigDir = `${baseDir}/counterstrikesharp/configs`;
+        const shortPkg = addon.package.includes("--") ? addon.package.split("--").slice(1).join("--") : addon.package;
+        const tokens = [normalizeToken(shortPkg), normalizeToken(addon.package), normalizeToken(displayTitle)].filter(
+          (tok) => tok.length >= 3,
+        );
+        const collected: string[] = [];
+        if (addon.package.toLowerCase() === "counterstrikesharp") {
+          const rootCfgs = await listDirIfPresent(listFiles, cssConfigDir);
+          for (const e of rootCfgs.entries) {
+            if (!e.isDir && !e.name.toLowerCase().includes(".example.") && isEditablePluginConfig(e.name)) {
+              collected.push(`${cssConfigDir}/${e.name}`);
+            }
+          }
+        }
+        const pluginsCfgRes = await listDirIfPresent(listFiles, `${cssConfigDir}/plugins`);
+        for (const d of pluginsCfgRes.entries.filter((e) => e.isDir)) {
+          const tok = normalizeToken(d.name);
+          if (tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok))) {
+            const sub = await listFiles(`${cssConfigDir}/plugins/${d.name}`);
+            for (const f of sub) {
+              if (!f.isDir && isEditablePluginConfig(f.name)) {
+                collected.push(`${cssConfigDir}/plugins/${d.name}/${f.name}`);
+              }
+            }
+          }
+        }
+        const csgoCfgRes = await listDirIfPresent(listFiles, `${csgoRoot}/cfg`);
+        for (const d of csgoCfgRes.entries.filter((e) => e.isDir)) {
+          const tok = normalizeToken(d.name);
+          if (tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok))) {
+            const sub = await listFiles(`${csgoRoot}/cfg/${d.name}`);
+            for (const f of sub) {
+              if (!f.isDir && isEditablePluginConfig(f.name)) {
+                collected.push(`${csgoRoot}/cfg/${d.name}/${f.name}`);
+              }
+            }
+          }
+        }
+        collected.sort((a, b) => a.localeCompare(b));
+        setMatchedFiles(collected);
+        setSelectedFile((prev) => (prev && collected.includes(prev) ? prev : (collected[0] || "")));
+      } else {
           const titleTok = normalizeToken(displayTitle);
           if (titleTok.length >= 3) {
             hits = allJson.filter((name) => normalizeToken(name).includes(titleTok));
@@ -348,6 +416,72 @@ export function AddonConfigModal({
         const paths = hits.map((name) => `${configDir}/${name}`);
         setMatchedFiles(paths);
         setSelectedFile((prev) => (prev && paths.includes(prev) ? prev : (paths[0] || "")));
+      } else if (isSML) {
+        const configDir = "FactoryGame/Configs";
+        const res = await listDirIfPresent(listFiles, configDir);
+        const allCfgs = res.entries
+          .filter((e) => !e.isDir && isEditablePluginConfig(e.name))
+          .map((e) => e.name)
+          .sort((a, b) => a.localeCompare(b));
+        const pkgTok = normalizeToken(addon.package);
+        const titleTok = normalizeToken(displayTitle);
+        let hits = allCfgs.filter((name) => {
+          const tok = normalizeToken(name.replace(CONFIG_EXT_RE, ""));
+          if (!tok) return false;
+          if (pkgTok.length >= 2 && (tok === pkgTok || tok.includes(pkgTok) || pkgTok.includes(tok))) return true;
+          return titleTok.length >= 3 && (tok === titleTok || tok.includes(titleTok));
+        });
+        if (hits.length === 0 && allCfgs.length > 0) {
+          hits = allCfgs;
+          setFuzzyNotice(`未精确匹配到单一配置文件，已列出 ${configDir} 目录中的全部配置文件。`);
+        }
+        const paths = hits.map((name) => `${configDir}/${name}`);
+        setMatchedFiles(paths);
+        setSelectedFile((prev) => (prev && paths.includes(prev) ? prev : (paths[0] || "")));
+      } else if (isCS2Plugin) {
+        const baseDir = (addon.targetDir || "game/csgo/addons").replace(/^\/+|\/+$/g, "") || "game/csgo/addons";
+        const csgoRoot = baseDir.endsWith("/addons") ? baseDir.slice(0, -"/addons".length) : "game/csgo";
+        const cssConfigDir = `${baseDir}/counterstrikesharp/configs`;
+        const shortPkg = addon.package.includes("--") ? addon.package.split("--").slice(1).join("--") : addon.package;
+        const tokens = [normalizeToken(shortPkg), normalizeToken(addon.package), normalizeToken(displayTitle)].filter(
+          (tok) => tok.length >= 3,
+        );
+        const collected: string[] = [];
+        if (addon.package.toLowerCase() === "counterstrikesharp") {
+          const rootCfgs = await listDirIfPresent(listFiles, cssConfigDir);
+          for (const e of rootCfgs.entries) {
+            if (!e.isDir && !e.name.toLowerCase().includes(".example.") && isEditablePluginConfig(e.name)) {
+              collected.push(`${cssConfigDir}/${e.name}`);
+            }
+          }
+        }
+        const pluginsCfgRes = await listDirIfPresent(listFiles, `${cssConfigDir}/plugins`);
+        for (const d of pluginsCfgRes.entries.filter((e) => e.isDir)) {
+          const tok = normalizeToken(d.name);
+          if (tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok))) {
+            const sub = await listFiles(`${cssConfigDir}/plugins/${d.name}`);
+            for (const f of sub) {
+              if (!f.isDir && isEditablePluginConfig(f.name)) {
+                collected.push(`${cssConfigDir}/plugins/${d.name}/${f.name}`);
+              }
+            }
+          }
+        }
+        const csgoCfgRes = await listDirIfPresent(listFiles, `${csgoRoot}/cfg`);
+        for (const d of csgoCfgRes.entries.filter((e) => e.isDir)) {
+          const tok = normalizeToken(d.name);
+          if (tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok))) {
+            const sub = await listFiles(`${csgoRoot}/cfg/${d.name}`);
+            for (const f of sub) {
+              if (!f.isDir && isEditablePluginConfig(f.name)) {
+                collected.push(`${csgoRoot}/cfg/${d.name}/${f.name}`);
+              }
+            }
+          }
+        }
+        collected.sort((a, b) => a.localeCompare(b));
+        setMatchedFiles(collected);
+        setSelectedFile((prev) => (prev && collected.includes(prev) ? prev : (collected[0] || "")));
       } else {
         const baseDir = (addon.targetDir || "plugins").replace(/^\/+|\/+$/g, "") || "plugins";
         const res = await listDirIfPresent(listFiles, baseDir);
@@ -384,15 +518,20 @@ export function AddonConfigModal({
     } finally {
       setFilesLoading(false);
     }
-  }, [open, addon, isFileMode, isTMod, isBepInEx, isOxide, listFiles, modIds, displayTitle, artifact?.status?.descriptor?.fileName]);
+  }, [open, addon, isFileMode, isTMod, isBepInEx, isOxide, isSML, isCS2Plugin, listFiles, modIds, displayTitle, artifact?.status?.descriptor?.fileName]);
 
   useEffect(() => {
     void scanWorkspaceConfigs();
   }, [scanWorkspaceConfigs]);
 
   const isJsonFormTarget = useMemo(
-    () => isTMod || (isOxide && selectedFile.toLowerCase().endsWith(".json")),
-    [isTMod, isOxide, selectedFile],
+    () =>
+      isTMod ||
+      ((isOxide || isCS2Plugin) && selectedFile.toLowerCase().endsWith(".json")) ||
+      (isSML &&
+        (selectedFile.toLowerCase().endsWith(".json") ||
+          (fileSavedContent !== "" && parsePlainJsonObject(fileSavedContent) !== null))),
+    [fileSavedContent, isCS2Plugin, isOxide, isSML, isTMod, selectedFile],
   );
 
   useEffect(() => {
@@ -410,13 +549,13 @@ export function AddonConfigModal({
         if (cancelled) return;
         setFileContent(text);
         setFileSavedContent(text);
-        const parsed = isJsonFormTarget ? parsePlainJsonObject(text) : null;
+        const parsed = (isJsonFormTarget || isSML) ? parsePlainJsonObject(text) : null;
         const primitiveCount = parsed
           ? Object.values(parsed).filter(
               (v) => typeof v === "boolean" || typeof v === "number" || typeof v === "string",
             ).length
           : 0;
-        setFileEditView(isJsonFormTarget && primitiveCount > 0 ? "form" : "json");
+        setFileEditView((isJsonFormTarget || (isSML && parsed !== null)) && primitiveCount > 0 ? "form" : "json");
       })
       .catch((err) => {
         if (cancelled) return;
@@ -428,7 +567,7 @@ export function AddonConfigModal({
     return () => {
       cancelled = true;
     };
-  }, [open, isFileMode, selectedFile, readFile, isJsonFormTarget]);
+  }, [open, isFileMode, isSML, selectedFile, readFile, isJsonFormTarget]);
 
   const parsedJsonObj = useMemo(
     () => (isJsonFormTarget ? parsePlainJsonObject(fileContent) : null),
@@ -791,7 +930,11 @@ export function AddonConfigModal({
                 ? "tModLoader 仅在模组配置与默认值不同或游戏内保存过配置后，才会在 SaveData/ModConfigs 目录生成 JSON 配置文件。你也可以手动新建配置文件。"
                 : isOxide || isBepInEx
                   ? `首次启动服务器加载该${noun}后，将在 ${(addon.targetDir || (isOxide ? "oxide" : "BepInEx")).replace(/^\/+|\/+$/g, "")}/config 目录自动生成对应的配置文件。`
-                  : `首次启动服务器加载该${noun}后，将在 ${(addon.targetDir || "plugins").replace(/^\/+|\/+$/g, "") || "plugins"} 目录自动生成对应的配置文件。`
+                  : isSML
+                    ? "首次启动服务器加载该模组后，若模组提供配置将在 FactoryGame/Configs 目录自动生成对应配置文件。"
+                    : isCS2Plugin
+                      ? `首次启动服务器加载该插件后，将在 ${(addon.targetDir || "game/csgo/addons").replace(/^\/+|\/+$/g, "")}/counterstrikesharp/configs/plugins 或 game/csgo/cfg 目录生成对应配置文件。`
+                      : `首次启动服务器加载该${noun}后，将在 ${(addon.targetDir || "plugins").replace(/^\/+|\/+$/g, "") || "plugins"} 目录自动生成对应的配置文件。`
             }
             action={
               isTMod ? (
