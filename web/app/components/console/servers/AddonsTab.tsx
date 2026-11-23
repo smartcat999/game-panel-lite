@@ -1826,7 +1826,7 @@ export function AddonsTab({
                   className="flex h-10 w-full items-center gap-1.5 rounded-full border border-[#DDE2F2] bg-[#F7F8FC] pl-3.5 pr-1 transition-[border-color,background-color,box-shadow] hover:border-[#B8C0E6] focus-within:border-[#2B3AE8] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#2B3AE8]/15"
                 >
                   <label htmlFor={browseSearchId} className="sr-only">
-                    {isSteam ? "搜索模组名称，或粘贴工坊单品与合集链接" : `搜索${noun}名称，或粘贴${noun}链接`}
+                    {isSteam ? `搜索${noun}名称，或粘贴工坊单品与合集链接` : `搜索${noun}名称，或粘贴${noun}链接`}
                   </label>
                   {isResolveDraft ? (
                     <Link2 className="h-4 w-4 shrink-0 text-[#2B3AE8]" aria-hidden />

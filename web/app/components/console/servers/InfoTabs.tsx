@@ -696,47 +696,49 @@ export function SettingsTab({
   return (
     <Card>
       <div className="flex flex-col gap-3 border-b border-[#EEF0F7] px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-[#14161F]">服务器配置</h2>
-          {!readOnly && subTab !== "danger" && (
-            <Button
-              size="sm"
-              variant="primary"
-              className="sm:hidden"
-              loading={isUpdating}
-              disabled={!dirty || isUpdating || quotaExceeded}
-              onClick={() => void handleSaveSettings()}
-            >
-              保存
-            </Button>
-          )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-[#14161F]">服务器配置</h2>
+            {!readOnly && subTab !== "danger" && (
+              <Button
+                size="sm"
+                variant="primary"
+                className="sm:hidden"
+                loading={isUpdating}
+                disabled={!dirty || isUpdating || quotaExceeded}
+                onClick={() => void handleSaveSettings()}
+              >
+                保存
+              </Button>
+            )}
+          </div>
+          <div className="min-w-0 max-w-full">
+            <Segmented
+              label="配置视图"
+              value={subTab}
+              onChange={setSubTab}
+              className="w-full justify-between sm:w-auto sm:justify-start"
+              items={[
+                ...(hasGameSchema ? [{ value: "game" as const, label: "游戏参数" }] : []),
+                { value: "container" as const, label: "资源规格" },
+                { value: "cover" as const, label: "服务器封面" },
+                ...(canDelete ? [{ value: "danger" as const, label: "危险操作" }] : []),
+              ]}
+            />
+          </div>
         </div>
-        <div className="flex min-w-0 max-w-full items-center gap-2.5">
-          <Segmented
-            label="配置视图"
-            value={subTab}
-            onChange={setSubTab}
-            className="w-full justify-between sm:w-auto sm:justify-start"
-            items={[
-              ...(hasGameSchema ? [{ value: "game" as const, label: "游戏参数" }] : []),
-              { value: "container" as const, label: "资源规格" },
-              { value: "cover" as const, label: "服务器封面" },
-              ...(canDelete ? [{ value: "danger" as const, label: "危险操作" }] : []),
-            ]}
-          />
-          {!readOnly && subTab !== "danger" && (
-            <Button
-              size="sm"
-              variant="primary"
-              className="hidden sm:inline-flex"
-              loading={isUpdating}
-              disabled={!dirty || isUpdating || quotaExceeded}
-              onClick={() => void handleSaveSettings()}
-            >
-              保存
-            </Button>
-          )}
-        </div>
+        {!readOnly && subTab !== "danger" && (
+          <Button
+            size="sm"
+            variant="primary"
+            className="hidden shrink-0 sm:inline-flex"
+            loading={isUpdating}
+            disabled={!dirty || isUpdating || quotaExceeded}
+            onClick={() => void handleSaveSettings()}
+          >
+            保存
+          </Button>
+        )}
       </div>
       {hasGameSchema && subTab === "game" && matchedApp ? (
         <div className="space-y-4 px-6 py-5">

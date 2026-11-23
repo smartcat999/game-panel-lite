@@ -262,14 +262,21 @@ function ServerDetail() {
   const state = busy[name];
   const readyCond = inst.status?.conditions?.find((c) => c.type === "Ready");
   const schedCond = inst.status?.conditions?.find((c) => c.type === "Scheduled");
-  const unschedulable = schedCond?.status === "False";
+  const quotaCond = inst.status?.conditions?.find((c) => c.type === "QuotaReserved");
+  const resizeCond = inst.status?.conditions?.find((c) => c.type === "ResourcesApproved");
+  const unschedulable =
+    schedCond?.status === "False" ||
+    quotaCond?.status === "False" ||
+    resizeCond?.status === "False";
   const tenantSuspended = Boolean(
     tenantObj?.status?.phase === "Suspended" ||
       inst.status?.resourceControl?.suspended ||
       readyCond?.reason === "SuspendedByTenant",
   );
   const rawBannerDesc =
-    (unschedulable ? schedCond?.message : undefined) ||
+    (schedCond?.status === "False" ? schedCond?.message : undefined) ||
+    (quotaCond?.status === "False" ? quotaCond?.message : undefined) ||
+    (resizeCond?.status === "False" ? resizeCond?.message : undefined) ||
     readyCond?.message ||
     inst.status?.message ||
     "";

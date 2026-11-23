@@ -448,6 +448,10 @@ func validateHistorical(op Operation) error {
 		if r.Allocation.State != corev1.AllocationActive {
 			return fail("funding result has no active historical holding", nil)
 		}
+	case corev1.CancelChange:
+		if r.Allocation.State == corev1.AllocationPending {
+			return fail("historical cancel change has Pending reservation", nil)
+		}
 	case corev1.RequestClose:
 		if r.Allocation.State != corev1.AllocationClosing && r.Allocation.State != corev1.AllocationClosed {
 			return fail("historical close did not close admission", nil)
