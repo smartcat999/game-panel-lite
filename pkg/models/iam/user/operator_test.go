@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"os"
 	"slices"
 	"strconv"
 	"sync"
@@ -13,6 +14,10 @@ import (
 	iamv1 "github.com/smartcat999/game-panel-cloud/pkg/apis/iam/v1"
 	metav1 "github.com/smartcat999/game-panel-cloud/pkg/apis/meta/v1"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/db"
+	"github.com/smartcat999/game-panel-cloud/pkg/models"
+	tenantdb "github.com/smartcat999/game-panel-cloud/pkg/repo/core/tenant"
+	userdb "github.com/smartcat999/game-panel-cloud/pkg/repo/iam/user"
+	"github.com/smartcat999/game-panel-cloud/tests/testpg"
 )
 
 type fakeUserDeletionStore struct {
@@ -175,4 +180,57 @@ func TestRevokeDeletingUserWithStoreHandlesControllerRaces(t *testing.T) {
 	if err := revokeDeletingUserWithStore(ctx, swapStore, newTestUser("uid-1", true), revoker); !errors.Is(err, db.ErrConflict) {
 		t.Fatalf("expected ErrConflict on UID swap, got %v", err)
 	}
+}
+
+func TestPersonalTenantDisabledAndOptOutProvisioning(t *testing.T) {
+	if PersonalTenantDisabled(nil) || PersonalTenantDisabled(&iamv1.User{}) {
+		t.Fatal("expected nil/unannotated user not to have personal tenant disabled")
+	}
+	if !PersonalTenantDisabled(&iamv1.User{
+		Metadata: metav1.ObjectMeta{Annotations: map[string]string{iamv1.AnnotationDisablePersonalTenant: " TRUE "}},
+	}) {
+		t.Fatal("expected disable-personal-tenant=true to be recognized")
+	}
+
+	fix := testpg.New(t, nil)
+	ctx := context.Background()
+	uDB := userdb.NewDB(fix.Pool)
+	tDB := tenantdb.NewDB(fix.Pool)
+
+	optOut, err := uDB.Create(ctx, &iamv1.User{
+		Metadata: metav1.ObjectMeta{
+			Name:        "viewer",
+			Annotations: map[string]string{iamv1.AnnotationDisablePersonalTenant: "true"},
+		},
+		Spec: iamv1.UserSpec{Email: "viewer@example.invalid", State: iamv1.UserStateActive},
+	})
+	if err != nil {
+		t.Fatalf("create opt-out user: %v", err)
+	}
+	if err := EnsurePersonalTenantForUID(ctx, fix.Registry, optOut.Metadata.Name, optOut.Metadata.UID); err != nil {
+		t.Fatalf("EnsurePersonalTenantForUID opt-out failed: %v", err)
+	}
+	if _, err := tDB.Get(ctx, optOut.Metadata.Name); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("expected no personal tenant for opt-out user, got err=%v", err)
+	}
+
+	normal, err := uDB.Create(ctx, &iamv1.User{
+		Metadata: metav1.ObjectMeta{
+			Name:        "bob",
+			Annotations: map[string]string{iamv1.AnnotationPersonalTenantUID: "missing-tenant-uid"},
+		},
+		Spec: iamv1.UserSpec{Email: "bob@example.invalid", State: iamv1.UserStateActive},
+	})
+	if err != nil {
+		t.Fatalf("create normal user: %v", err)
+	}
+	if err := EnsurePersonalTenantForUID(ctx, fix.Registry, normal.Metadata.Name, normal.Metadata.UID); !errors.Is(err, models.ErrConflict) {
+		t.Fatalf("expected ErrConflict when normal user bound personal tenant is missing, got %v", err)
+	}
+}
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	testpg.Stop()
+	os.Exit(code)
 }

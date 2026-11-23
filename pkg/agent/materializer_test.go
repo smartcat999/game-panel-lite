@@ -647,3 +647,79 @@ func TestNodeShouldRunPrewarmJobRespectsAllowedApps(t *testing.T) {
 		t.Fatal("expected disallowed PrewarmJob to be skipped by node agent")
 	}
 }
+
+func seedServerArchiveWithFiles(t *testing.T, workDir, coord, hexDigest string, files map[string]string) {
+	t.Helper()
+	seedFakeArchiveArtifact(t, workDir, coord, hexDigest, files)
+	meta := CachedArtifactMeta{
+		Coordinate:    coord,
+		Digest:        "sha256:" + hexDigest,
+		HexDigest:     hexDigest,
+		SizeBytes:     int64(len("archive-blob")),
+		ArchiveFormat: registryv1.ArchiveFormatZip,
+		TargetPath:    ".",
+	}
+	if err := writeCachedArtifactMeta(workDir, &meta); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOxideOverlayPreservesOnRestartReappliesOnUpgradeAndRestoresOnUninstall(t *testing.T) {
+	workDir := t.TempDir()
+	hostDir := filepath.Join(workDir, "instances", "rust-1")
+
+	seedServerArchiveWithFiles(t, workDir, "rust-server.rust.v1", strings.Repeat("1", 64), map[string]string{
+		"RustDedicated": "bin-v1",
+		"RustDedicated_Data/Managed/Assembly-CSharp.dll": "vanilla-csharp-v1",
+	})
+	seedServerArchiveWithFiles(t, workDir, "rust-server.rust.v2", strings.Repeat("2", 64), map[string]string{
+		"RustDedicated": "bin-v2",
+		"RustDedicated_Data/Managed/Assembly-CSharp.dll": "vanilla-csharp-v2",
+	})
+	seedFakeArchiveArtifact(t, workDir, "rust-umod.oxide-rust.2.0.7912", strings.Repeat("a", 64), map[string]string{
+		"RustDedicated_Data/Managed/Assembly-CSharp.dll": "oxide-patched-csharp",
+		"RustDedicated_Data/Managed/Oxide.Core.dll":      "oxide-core",
+	})
+	seedFakeBlobFile(t, workDir, "rust-umod.gather-manager.2.2.78", strings.Repeat("b", 64), "GatherManager.cs", "// cs plugin")
+
+	mat := &BlobWorkspaceMaterializer{WorkDir: workDir}
+	in := &corev1.Instance{
+		Spec: corev1.InstanceSpec{
+			ServerArtifact: &corev1.ArtifactRef{Repository: "rust-server", Package: "rust", Version: "v1", TargetPath: "."},
+			Addons: []corev1.InstanceAddon{
+				{Repository: "rust-umod", Package: "oxide-rust", Version: "2.0.7912", InstallMode: corev1.AddonInstallModeOxide, TargetDir: "oxide"},
+				{Repository: "rust-umod", Package: "gather-manager", Version: "2.2.78", InstallMode: corev1.AddonInstallModeOxide, TargetDir: "oxide"},
+			},
+		},
+	}
+	if err := mat.Materialize(context.Background(), hostDir, in); err != nil {
+		t.Fatalf("initial Materialize failed: %v", err)
+	}
+	assertWorkspaceFile(t, filepath.Join(hostDir, "RustDedicated_Data/Managed/Assembly-CSharp.dll"), "oxide-patched-csharp")
+	assertWorkspaceFile(t, filepath.Join(hostDir, "RustDedicated_Data/Managed/Oxide.Core.dll"), "oxide-core")
+	assertWorkspaceFile(t, filepath.Join(hostDir, "oxide/plugins/GatherManager.cs"), "// cs plugin")
+
+	// Restart without changes must keep Oxide's Assembly-CSharp.dll untouched.
+	if err := mat.Materialize(context.Background(), hostDir, in); err != nil {
+		t.Fatalf("restart Materialize failed: %v", err)
+	}
+	assertWorkspaceFile(t, filepath.Join(hostDir, "RustDedicated_Data/Managed/Assembly-CSharp.dll"), "oxide-patched-csharp")
+
+	// Server upgrade must refresh RustDedicated while re-applying Oxide overlay.
+	in.Spec.ServerArtifact.Version = "v2"
+	if err := mat.Materialize(context.Background(), hostDir, in); err != nil {
+		t.Fatalf("server upgrade Materialize failed: %v", err)
+	}
+	assertWorkspaceFile(t, filepath.Join(hostDir, "RustDedicated"), "bin-v2")
+	assertWorkspaceFile(t, filepath.Join(hostDir, "RustDedicated_Data/Managed/Assembly-CSharp.dll"), "oxide-patched-csharp")
+
+	// Removing all Oxide addons must remove Oxide.Core.dll and restore vanilla v2 Assembly-CSharp.dll.
+	in.Spec.Addons = nil
+	if err := mat.Materialize(context.Background(), hostDir, in); err != nil {
+		t.Fatalf("uninstall Oxide Materialize failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(hostDir, "RustDedicated_Data/Managed/Oxide.Core.dll")); !os.IsNotExist(err) {
+		t.Fatalf("expected Oxide.Core.dll removed on uninstall, err=%v", err)
+	}
+	assertWorkspaceFile(t, filepath.Join(hostDir, "RustDedicated_Data/Managed/Assembly-CSharp.dll"), "vanilla-csharp-v2")
+}

@@ -14,6 +14,7 @@ const (
 	ProviderFabricMC      = "fabricmc"
 	ProviderNeoForge      = "neoforge"
 	ProviderThunderstore  = "thunderstore"
+	ProviderUMod          = "umod"
 	ProviderSteam         = "steam"
 	ProviderHTTP          = "http"
 	ProviderTerraria      = "terraria"
@@ -23,6 +24,7 @@ const (
 	FormatWorkshopMod     = "workshop_mod"
 	FormatModrinthAddon   = "modrinth_addon"
 	FormatThunderstoreMod = "thunderstore_mod"
+	FormatUModPlugin      = "umod_plugin"
 	FormatGeneric         = "generic"
 
 	ArchiveFormatRaw   = "raw"
@@ -58,6 +60,7 @@ const (
 	DefaultSteamAPIBaseURL             = "https://api.steampowered.com"
 	DefaultModrinthBaseURL             = "https://api.modrinth.com/v2"
 	DefaultThunderstoreBaseURL         = "https://thunderstore.io"
+	DefaultUModBaseURL                 = "https://umod.org"
 	DefaultFabricMetaBaseURL           = "https://meta.fabricmc.net"
 	DefaultMojangManifestURL           = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 	DefaultMojangMirrorBase            = "https://bmclapi2.bangbang93.com"

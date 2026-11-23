@@ -310,6 +310,66 @@ func seedThunderstoreProxyPackage(t *testing.T, ctx context.Context, fix testpg.
 	}
 }
 
+func TestGetUModPersistedPackageEnrichesAvailableVersions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/plugins/gather-manager.json":
+			_, _ = w.Write([]byte(`{"slug":"gather-manager","name":"GatherManager","title":"Gather Manager","description":"Gather rates","icon_url":"https://assets.umod.org/icon.png","latest_release_version":"2.2.78","download_url":"https://umod.org/plugins/GatherManager.cs"}`))
+		case "/plugins/gather-manager/versions.json":
+			_, _ = w.Write([]byte(`{"data":[{"version":"2.2.78"},{"version":"2.2.77"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	fix := testpg.New(t, nil)
+	ctx := context.Background()
+	seedUModProxyPackage(t, ctx, fix, srv.URL+"/games/rust")
+
+	got, err := NewOperator(fix.Registry, nil).Get(ctx, "rust-umod.gather-manager")
+	if err != nil {
+		t.Fatalf("Get persisted uMod package: %v", err)
+	}
+	if !slices.Equal(got.AvailableVersions, []string{"2.2.78", "2.2.77"}) || got.LatestVersion != "2.2.78" {
+		t.Fatalf("expected live uMod versions, got latest=%q available=%v", got.LatestVersion, got.AvailableVersions)
+	}
+	if len(got.Dependencies) != 1 || got.Dependencies[0].Package != "oxide-rust" {
+		t.Fatalf("expected oxide-rust dependency, got %#v", got.Dependencies)
+	}
+	if !strings.Contains(got.IconURL, "/icon?u=") {
+		t.Fatalf("expected signed uMod icon URL, got %q", got.IconURL)
+	}
+}
+
+func seedUModProxyPackage(t *testing.T, ctx context.Context, fix testpg.Fixture, endpoint string) {
+	t.Helper()
+	if _, err := upstreamdb.NewDB(fix.Pool).Create(ctx, &registryv1.Upstream{
+		Metadata: metav1.ObjectMeta{Name: "up-rust-umod"},
+		Provider: registryv1.UpstreamProviderUMod,
+		Endpoint: endpoint,
+	}); err != nil {
+		t.Fatalf("Create upstream: %v", err)
+	}
+	if _, err := repositorydb.NewDB(fix.Pool).Create(ctx, &registryv1.Repository{
+		Metadata: metav1.ObjectMeta{Name: "rust-umod"},
+		Spec:     registryv1.RepositorySpec{Mode: registryv1.RepositoryModeProxy, Format: registryv1.FormatUModPlugin, UpstreamName: "up-rust-umod"},
+	}); err != nil {
+		t.Fatalf("Create repo: %v", err)
+	}
+	if _, err := pkgdb.NewDB(fix.Pool).Create(ctx, &registryv1.Package{
+		Metadata:      metav1.ObjectMeta{Name: "rust-umod.gather-manager"},
+		Repository:    "rust-umod",
+		Package:       "gather-manager",
+		Title:         "Gather Manager",
+		Description:   "cached",
+		IconURL:       "https://assets.umod.org/icon.png",
+		LatestVersion: "2.2.77",
+	}); err != nil {
+		t.Fatalf("Create package: %v", err)
+	}
+}
+
 func TestMain(m *testing.M) {
 	code := m.Run()
 	testpg.Stop()

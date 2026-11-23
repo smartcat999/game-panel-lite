@@ -30,12 +30,13 @@ const (
 	VerbPatch  = "patch"
 	VerbDelete = "delete"
 
-	AnnotationSessionUserAgent  = "iam.gamepanel.io/user-agent"
-	AnnotationSessionClientIP   = "iam.gamepanel.io/client-ip"
-	AnnotationSessionCurrent    = "iam.gamepanel.io/current"
-	AnnotationOwnerUID          = "iam.gamepanel.io/owner-uid"
-	AnnotationPersonalTenantUID = "iam.gamepanel.io/personal-tenant-uid"
-	AnnotationSessionsRevoked   = "iam.gamepanel.io/sessions-revoked-uid"
+	AnnotationSessionUserAgent      = "iam.gamepanel.io/user-agent"
+	AnnotationSessionClientIP       = "iam.gamepanel.io/client-ip"
+	AnnotationSessionCurrent        = "iam.gamepanel.io/current"
+	AnnotationOwnerUID              = "iam.gamepanel.io/owner-uid"
+	AnnotationPersonalTenantUID     = "iam.gamepanel.io/personal-tenant-uid"
+	AnnotationDisablePersonalTenant = "iam.gamepanel.io/disable-personal-tenant"
+	AnnotationSessionsRevoked       = "iam.gamepanel.io/sessions-revoked-uid"
 
 	CacheKeyPrefixNodeToken = "gp:iam:node-token:"
 

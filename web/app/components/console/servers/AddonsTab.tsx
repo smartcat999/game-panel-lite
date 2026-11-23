@@ -97,6 +97,7 @@ function looksLikeResolveInput(input: string, isSteam: boolean): boolean {
     trimmed.includes("steamcommunity.com/") ||
     trimmed.includes("modrinth.com/") ||
     trimmed.includes("thunderstore.io/") ||
+    trimmed.includes("umod.org/") ||
     /^workshop-\d+$/i.test(trimmed)
   ) {
     return true;

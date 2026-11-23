@@ -349,6 +349,16 @@ func TestExtractArchiveAddonsGenericModes(t *testing.T) {
 	}
 }
 
+func TestExtractArchiveAddonsOxideMode(t *testing.T) {
+	rustApp := findBuiltInApp(t, "rust-dedicated")
+	rustAddons := ExtractArchiveAddons(rustApp, []string{"RustDedicated_Data/Managed/Oxide.Core.dll", "oxide/plugins/GatherManager.cs"}, nil)
+	if len(rustAddons) != 1 || rustAddons[0].Package != "GatherManager" ||
+		rustAddons[0].Repository != "rust-umod" || rustAddons[0].InstallMode != corev1.AddonInstallModeOxide ||
+		rustAddons[0].TargetDir != "oxide" {
+		t.Fatalf("unexpected Rust Oxide extracted plugins: %+v", rustAddons)
+	}
+}
+
 func TestExtractArchiveAddonsFallbackAndNonDSTMerge(t *testing.T) {
 	nilApp := &corev1.App{}
 	tmod := ExtractArchiveAddons(nilApp, []string{"Mods/CalamityMod.tmod"}, nil)

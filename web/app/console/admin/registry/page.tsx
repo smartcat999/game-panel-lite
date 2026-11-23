@@ -74,6 +74,10 @@ function parseAddonInput(raw: string): string {
   if (modrinthMatch) return modrinthMatch[1];
   const tsMatch = trimmed.match(/thunderstore\.io\/(?:c\/[^/]+\/p|package)\/([^/?#]+)\/([^/?#]+)/i);
   if (tsMatch) return `${tsMatch[1]}-${tsMatch[2]}`;
+  const umodPluginMatch = trimmed.match(/umod\.org\/plugins\/([^\s,;/?#"<>]+)/i);
+  if (umodPluginMatch) return umodPluginMatch[1].replace(/\.(json|cs)$/i, "");
+  const umodGameMatch = trimmed.match(/umod\.org\/games\/([^\s,;/?#"<>]+)/i);
+  if (umodGameMatch) return `oxide-${umodGameMatch[1].replace(/\.json$/i, "").toLowerCase()}`;
   return trimmed;
 }
 

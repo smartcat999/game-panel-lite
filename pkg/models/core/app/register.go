@@ -7,6 +7,7 @@ import (
 	_ "github.com/smartcat999/game-panel-cloud/pkg/models/core/app/providers/bepinex"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/models/core/app/providers/dst"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/models/core/app/providers/flatdir"
+	_ "github.com/smartcat999/game-panel-cloud/pkg/models/core/app/providers/oxide"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/models/core/app/providers/tmod"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/models/core/app/providers/workshoptree"
 )

@@ -37,6 +37,7 @@ type WorkspaceContext struct {
 	Root             *os.Root
 	RequireReflink   bool
 	DisableReflink   bool
+	ServerReplaced   bool
 	Prev             AddonsManifest
 	Next             *AddonsManifest
 	BlobFilePath     func(hexDigest string) string

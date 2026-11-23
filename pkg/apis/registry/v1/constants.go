@@ -46,6 +46,7 @@ const (
 	UpstreamProviderNeoForge     = "neoforge"
 	UpstreamProviderModrinth     = "modrinth"
 	UpstreamProviderThunderstore = "thunderstore"
+	UpstreamProviderUMod         = "umod"
 	UpstreamProviderSteam        = "steam"
 	UpstreamProviderHTTP         = "http"
 
@@ -57,6 +58,7 @@ const (
 	FormatWorkshopMod     = "workshop_mod"
 	FormatModrinthAddon   = "modrinth_addon"
 	FormatThunderstoreMod = "thunderstore_mod"
+	FormatUModPlugin      = "umod_plugin"
 	FormatGeneric         = "generic"
 
 	ArchiveFormatRaw   = "raw"

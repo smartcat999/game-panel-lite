@@ -833,3 +833,63 @@ func TestThunderstoreCatalogDetailResolveAndImageProxy(t *testing.T) {
 		t.Fatal("expected ccdn.thunderstore.io to be allowlisted for image proxy")
 	}
 }
+
+func newMockUModServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/plugins/search.json", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("filter") != "rust" {
+			t.Fatalf("expected filter=rust, got %q", r.URL.Query().Get("filter"))
+		}
+		_, _ = w.Write([]byte(`{"total":1,"data":[{"slug":"gather-manager","name":"GatherManager","title":"Gather Manager","description":"Resource rate multiplier","author":"Ryan","icon_url":"https://assets.umod.org/images/icons/plugin/gm.png","url":"https://umod.org/plugins/gather-manager","download_url":"https://umod.org/plugins/GatherManager.cs","downloads":757729,"latest_release_version":"2.2.78","latest_release_at_atom":"2022-08-06T12:25:08Z","tags_all":"rust,mechanics,resources"}]}`))
+	})
+	mux.HandleFunc("/games/rust.json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"name":"Rust","slug":"rust","description":"Oxide modification for the game Rust","snapshot_url":"https://github.com/OxideMod/Oxide.Rust/releases/download/2.0.7912/Oxide.Rust-linux.zip","icon_url":"https://assets.umod.org/images/icons/game/rust.png","repository":"OxideMod/Oxide.Rust","url":"https://umod.org/games/rust","latest_release_version":"2.0.7912","latest_release_at_atom":"2026-11-19T07:22:15Z","watchers":3001}`))
+	})
+	mux.HandleFunc("/games/rust/versions.json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"version":"2.0.7909","description_md":"<ul><li>Hotfix patch</li></ul>","created_at_atom":"2026-11-19T01:51:14Z"}]}`))
+	})
+	mux.HandleFunc("/plugins/gather-manager.json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"slug":"gather-manager","name":"GatherManager","title":"Gather Manager","description":"Resource rate multiplier","author":"Ryan","icon_url":"https://assets.umod.org/images/icons/plugin/gm.png","url":"https://umod.org/plugins/gather-manager","download_url":"https://umod.org/plugins/GatherManager.cs","downloads":757729,"latest_release_version":"2.2.78","latest_release_at_atom":"2022-08-06T12:25:08Z","tags_all":"rust,mechanics,resources"}`))
+	})
+	mux.HandleFunc("/plugins/gather-manager/versions.json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"version":"2.2.78","description_md":"<ul><li>Pickup fix</li></ul>","download_url":"https://umod.org/plugins/GatherManager.cs?version=2.2.78","created_at_atom":"2022-08-06T12:25:08Z"},{"version":"2.2.77","description_md":"Hook update","download_url":"https://umod.org/plugins/GatherManager.cs?version=2.2.77","created_at_atom":"2022-08-05T20:31:24Z"}]}`))
+	})
+	return httptest.NewServer(mux)
+}
+
+func TestUModCatalogDetailResolveAndImageProxy(t *testing.T) {
+	toks := ParseInputTokens(ProviderUMod, "https://umod.org/plugins/gather-manager, https://umod.org/games/rust, https://umod.org/plugins/GatherManager.cs, vanish")
+	if !slices.Equal(toks, []string{"gather-manager", "GatherManager", "oxide-rust", "vanish"}) {
+		t.Fatalf("unexpected uMod tokens: %#v", toks)
+	}
+	srv := newMockUModServer(t)
+	defer srv.Close()
+
+	svc := New(&unitTestCache{data: make(map[string]string)}, Options{SigningSecret: "sec"})
+	src := Source{Provider: ProviderUMod, Endpoint: srv.URL + "/games/rust", Format: FormatUModPlugin, ImageProxyPrefix: "/proxy"}
+	res, err := svc.Search(context.Background(), src, SearchParams{Query: "oxide", Page: 1, Limit: 10})
+	if err != nil || len(res.Items) != 2 || res.Items[0].ID != "oxide-rust" || res.Items[1].ID != "gather-manager" {
+		t.Fatalf("unexpected uMod search: %#v err=%v", res, err)
+	}
+	det, err := svc.Detail(context.Background(), src, "gather-manager", "")
+	if err != nil || det.FileName != "GatherManager.cs" || !slices.Equal(det.AvailableVersions, []string{"2.2.78", "2.2.77"}) ||
+		!slices.Equal(det.Tags, []string{"mechanics", "resources"}) || len(det.Dependencies) != 1 || det.Dependencies[0].ID != "oxide-rust" {
+		t.Fatalf("unexpected uMod plugin detail: %#v err=%v", det, err)
+	}
+	relFW, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "oxide-rust"})
+	if err != nil || relFW.ArchiveFormat != ArchiveFormatZip || relFW.Version != "2.0.7912" || !strings.Contains(relFW.DownloadURL, "Oxide.Rust-linux.zip") {
+		t.Fatalf("unexpected Oxide framework release: %#v err=%v", relFW, err)
+	}
+	relPin, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "gather-manager", Version: "2.2.77"})
+	if err != nil || relPin.ArchiveFormat != ArchiveFormatRaw || relPin.FileName != "GatherManager.cs" || !strings.HasSuffix(relPin.DownloadURL, "version=2.2.77") {
+		t.Fatalf("unexpected pinned uMod release: %#v err=%v", relPin, err)
+	}
+	latestMap, err := svc.ResolveLatestVersions(context.Background(), src, []string{"oxide-rust", "gather-manager"})
+	if err != nil || latestMap["oxide-rust"] != "2.0.7912" || latestMap["gather-manager"] != "2.2.78" {
+		t.Fatalf("unexpected uMod latest versions: %#v err=%v", latestMap, err)
+	}
+	if signed := svc.SignImageProxyURL("/proxy", "https://assets.umod.org/images/icons/plugin/gm.png"); signed == "" {
+		t.Fatal("expected assets.umod.org to be allowlisted for image proxy")
+	}
+}

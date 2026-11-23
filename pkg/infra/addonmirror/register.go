@@ -12,5 +12,6 @@ import (
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/terraria"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/thunderstore"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/tmodloader"
+	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/umod"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/vanilla"
 )

@@ -340,6 +340,28 @@ func TestBuiltInMinecraftFabricBindingRender(t *testing.T) {
 	}
 	assertBuiltInMinecraftNeoForgeBindingRender(t, byName["minecraft-neoforge"])
 	assertBuiltInValheimBepInExBindingRender(t, byName["valheim-dedicated"])
+	assertBuiltInRustOxideBindingRender(t, byName["rust-dedicated"])
+}
+
+func assertBuiltInRustOxideBindingRender(t *testing.T, rust *corev1.App) {
+	t.Helper()
+	if rust == nil || rust.AddonBinding == nil || rust.AddonBinding.Repository != "rust-umod" ||
+		rust.AddonBinding.InstallMode != corev1.AddonInstallModeOxide || rust.AddonBinding.TargetDir != "oxide" {
+		t.Fatalf("unexpected rust-dedicated AddonBinding: %+v", rust)
+	}
+	inst := &corev1.Instance{
+		Metadata: metav1.ObjectMeta{Name: "rust-binding-test", Annotations: map[string]string{AnnotationAppConfig: `{}`}},
+		Spec: corev1.InstanceSpec{
+			Addons: []corev1.InstanceAddon{{Package: "gather-manager", Version: "2.2.78"}},
+		},
+	}
+	if err := RenderInstanceSpec(rust, inst); err != nil {
+		t.Fatalf("RenderInstanceSpec(rust-dedicated): %v", err)
+	}
+	if len(inst.Spec.Addons) != 1 || inst.Spec.Addons[0].Coordinate() != "rust-umod.gather-manager.2.2.78" ||
+		inst.Spec.Addons[0].InstallMode != corev1.AddonInstallModeOxide || inst.Spec.Addons[0].TargetDir != "oxide" {
+		t.Fatalf("unexpected Rust normalized Addons: %+v", inst.Spec.Addons)
+	}
 }
 
 func assertBuiltInValheimBepInExBindingRender(t *testing.T, valheim *corev1.App) {

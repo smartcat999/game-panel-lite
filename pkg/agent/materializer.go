@@ -85,10 +85,16 @@ func (m *BlobWorkspaceMaterializer) Materialize(ctx context.Context, hostDir str
 	storageInfo := EnsureBlobCacheStorageInfo(m.WorkDir)
 	disableReflink := !requireReflink && !storageInfo.ProbedAt.IsZero() && !storageInfo.ReflinkSupported
 	managed := managedInstanceFileSet(in.Spec.Files)
-	if err := m.materializeServerArtifact(wsRoot, stateRoot, in.Spec.ServerArtifact, managed, requireReflink, disableReflink); err != nil {
+	prevAddonFiles := toKeepSet(readAddonsManifest(stateRoot).Files)
+	serverManifest, serverReplaced, err := m.materializeServerArtifact(wsRoot, stateRoot, in.Spec.ServerArtifact, managed, prevAddonFiles, requireReflink, disableReflink)
+	if err != nil {
 		return err
 	}
-	return m.materializeAddons(wsRoot, stateRoot, in.Spec.Addons, requireReflink, disableReflink)
+	removedFiles, err := m.materializeAddons(wsRoot, stateRoot, in.Spec.Addons, serverReplaced, requireReflink, disableReflink)
+	if err != nil {
+		return err
+	}
+	return m.restoreUnlinkedServerFiles(wsRoot, in.Spec.ServerArtifact, managed, removedFiles, serverManifest.Files, requireReflink, disableReflink)
 }
 
 func (m *BlobWorkspaceMaterializer) openStateRoot(cleanHost, uid string) (*os.Root, error) {
@@ -144,34 +150,116 @@ func collectInstanceArtifactCoordinates(in *corev1.Instance) []string {
 func (m *BlobWorkspaceMaterializer) materializeServerArtifact(
 	wsRoot, stateRoot *os.Root,
 	ref *corev1.ArtifactRef,
-	managed map[string]bool,
+	managed, prevAddonFiles map[string]bool,
 	requireReflink, disableReflink bool,
-) error {
+) (serverArtifactManifest, bool, error) {
 	prev := readServerManifest(stateRoot)
 	if ref == nil || ref.Coordinate() == "" {
 		if len(prev.Files) > 0 {
 			unlinkWorkspaceFilesFiltered(wsRoot, prev.Files, managed)
 			_ = stateRoot.Remove(serverArtifactManifestFile)
 		}
+		return serverArtifactManifest{}, len(prev.Files) > 0, nil
+	}
+	meta, err := readCachedArtifactMeta(m.WorkDir, ref.Coordinate())
+	if err != nil {
+		return prev, false, err
+	}
+	forceReplace := prev.Coordinate != meta.Coordinate || prev.Digest != meta.Digest || len(prev.Files) == 0
+	if prev.Coordinate != "" && (prev.Coordinate != meta.Coordinate || prev.Digest != meta.Digest) {
+		unlinkWorkspaceFilesFiltered(wsRoot, prev.Files, managed)
+	}
+	skip := managed
+	if !forceReplace && len(prevAddonFiles) > 0 {
+		skip = mergeBoolSets(managed, prevAddonFiles)
+	}
+	files, err := m.materializeServerPayload(wsRoot, ref, meta, skip, requireReflink, disableReflink, forceReplace)
+	if err != nil {
+		return prev, forceReplace, err
+	}
+	if !forceReplace {
+		files = preserveSkippedAddonServerFiles(files, prev.Files, managed, prevAddonFiles)
+	}
+	manifest := serverArtifactManifest{Coordinate: meta.Coordinate, Digest: meta.Digest, Files: files}
+	return manifest, forceReplace, volume.WriteJSONAtomicInRoot(stateRoot, serverArtifactManifestFile, manifest)
+}
+
+func (m *BlobWorkspaceMaterializer) restoreUnlinkedServerFiles(
+	wsRoot *os.Root,
+	ref *corev1.ArtifactRef,
+	managed map[string]bool,
+	removedFiles, serverFiles []string,
+	requireReflink, disableReflink bool,
+) error {
+	if ref == nil || ref.Coordinate() == "" || len(removedFiles) == 0 || len(serverFiles) == 0 {
+		return nil
+	}
+	restoreSet := intersectBoolSets(toKeepSet(removedFiles), toKeepSet(serverFiles))
+	if len(restoreSet) == 0 {
 		return nil
 	}
 	meta, err := readCachedArtifactMeta(m.WorkDir, ref.Coordinate())
 	if err != nil {
 		return err
 	}
-	forceReplace := prev.Coordinate != meta.Coordinate || prev.Digest != meta.Digest || len(prev.Files) == 0
-	if prev.Coordinate != "" && (prev.Coordinate != meta.Coordinate || prev.Digest != meta.Digest) {
-		unlinkWorkspaceFilesFiltered(wsRoot, prev.Files, managed)
+	skip := buildRestoreSkipSet(serverFiles, restoreSet, managed)
+	_, err = m.materializeServerPayload(wsRoot, ref, meta, skip, requireReflink, disableReflink, true)
+	return err
+}
+
+func mergeBoolSets(a, b map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(a)+len(b))
+	for k, v := range a {
+		if v {
+			out[k] = true
+		}
 	}
-	files, err := m.materializeServerPayload(wsRoot, ref, meta, managed, requireReflink, disableReflink, forceReplace)
-	if err != nil {
-		return err
+	for k, v := range b {
+		if v {
+			out[k] = true
+		}
 	}
-	return volume.WriteJSONAtomicInRoot(stateRoot, serverArtifactManifestFile, serverArtifactManifest{
-		Coordinate: meta.Coordinate,
-		Digest:     meta.Digest,
-		Files:      files,
-	})
+	return out
+}
+
+func intersectBoolSets(a, b map[string]bool) map[string]bool {
+	out := make(map[string]bool)
+	for k := range a {
+		if b[k] {
+			out[k] = true
+		}
+	}
+	return out
+}
+
+func buildRestoreSkipSet(serverFiles []string, restoreSet, managed map[string]bool) map[string]bool {
+	skip := make(map[string]bool, len(serverFiles)+len(managed))
+	for _, f := range serverFiles {
+		if !restoreSet[f] || managed[f] {
+			skip[f] = true
+		}
+	}
+	for f, v := range managed {
+		if v {
+			skip[f] = true
+		}
+	}
+	return skip
+}
+
+func preserveSkippedAddonServerFiles(files, prevFiles []string, managed, prevAddonFiles map[string]bool) []string {
+	if len(prevAddonFiles) == 0 || len(prevFiles) == 0 {
+		return files
+	}
+	seen := toKeepSet(files)
+	for _, rel := range prevFiles {
+		clean := cleanWorkspaceRelPath(rel)
+		if clean != "" && prevAddonFiles[clean] && !managed[clean] && !seen[clean] {
+			seen[clean] = true
+			files = append(files, clean)
+		}
+	}
+	return files
 }
 
 func (m *BlobWorkspaceMaterializer) materializeServerPayload(
@@ -320,8 +408,8 @@ func readAddonsManifest(stateRoot *os.Root) addonsManifest {
 func (m *BlobWorkspaceMaterializer) materializeAddons(
 	wsRoot, stateRoot *os.Root,
 	addons []corev1.InstanceAddon,
-	requireReflink, disableReflink bool,
-) error {
+	serverReplaced, requireReflink, disableReflink bool,
+) ([]string, error) {
 	prev := readAddonsManifest(stateRoot)
 	if len(addons) == 0 {
 		unlinkWorkspaceFiles(wsRoot, prev.Files)
@@ -330,7 +418,7 @@ func (m *BlobWorkspaceMaterializer) materializeAddons(
 			cleanupRemovedAddonModes(wsRoot, prev, nil)
 			_ = stateRoot.Remove(addonsManifestFile)
 		}
-		return nil
+		return prev.Files, nil
 	}
 
 	next := addonsManifest{Digests: make(map[string]string, len(addons))}
@@ -338,6 +426,7 @@ func (m *BlobWorkspaceMaterializer) materializeAddons(
 		Root:             wsRoot,
 		RequireReflink:   requireReflink,
 		DisableReflink:   disableReflink,
+		ServerReplaced:   serverReplaced,
 		Prev:             prev,
 		Next:             &next,
 		BlobFilePath:     func(hexDigest string) string { return blobFilePath(m.WorkDir, hexDigest) },
@@ -346,16 +435,28 @@ func (m *BlobWorkspaceMaterializer) materializeAddons(
 	}
 	for i := range addons {
 		if err := m.injectConfiguredAddon(ws, addons[i]); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	unlinkWorkspaceFilesFiltered(wsRoot, prev.Files, toKeepSet(next.Files))
+	keepFiles := toKeepSet(next.Files)
+	removed := diffMissingFiles(prev.Files, keepFiles)
+	unlinkWorkspaceFilesFiltered(wsRoot, prev.Files, keepFiles)
 	unlinkMissingDirs(wsRoot, prev.Dirs, next.Dirs)
 	if err := finalizeActiveAddonModes(ws); err != nil {
-		return err
+		return nil, err
 	}
 	cleanupRemovedAddonModes(wsRoot, prev, next.Modes)
-	return volume.WriteJSONAtomicInRoot(stateRoot, addonsManifestFile, next)
+	return removed, volume.WriteJSONAtomicInRoot(stateRoot, addonsManifestFile, next)
+}
+
+func diffMissingFiles(prevFiles []string, keep map[string]bool) []string {
+	var removed []string
+	for _, rel := range prevFiles {
+		if clean := cleanWorkspaceRelPath(rel); clean != "" && !keep[clean] {
+			removed = append(removed, clean)
+		}
+	}
+	return removed
 }
 
 func (m *BlobWorkspaceMaterializer) injectConfiguredAddon(ws *driver.WorkspaceContext, addon corev1.InstanceAddon) error {

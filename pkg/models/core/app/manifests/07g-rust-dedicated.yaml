@@ -7,7 +7,7 @@ metadata:
     gamepanel.io/category: survival
 displayName: 腐蚀 Rust
 tagline: 硬核多人沙盒生存对抗 · 程序地图与领地攻防服
-summary: 支持地图尺寸与种子生成、对抗/合作规则切换、领地建筑腐朽与维护消耗调节、自动存盘及优雅停服保存。
+summary: 支持地图尺寸与种子生成、对抗/合作规则切换、领地建筑腐朽与维护消耗调节、uMod/Oxide 插件扩展、自动存盘及优雅停服保存。
 category: survival
 coverImage: /landing/games/rust-dedicated.jpg
 image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
@@ -36,6 +36,10 @@ serverBinding:
   repository: rust-server
   package: rust
   targetPath: .
+addonBinding:
+  repository: rust-umod
+  installMode: oxide
+  targetDir: oxide
 env:
   HOSTNAME: GamePanel 腐蚀生存服
   DESCRIPTION: 由 GamePanel Lite 驱动的多人腐蚀专用服务器
@@ -277,8 +281,8 @@ fileTemplates:
     fps.limit {{fpsLimit}}
     rcon.password "{{rconPassword}}"
 preStartCommand: |
-  chmod +x /data/RustDedicated 2>/dev/null || true
-  mkdir -p /data/server/rust/cfg /data/.steam/sdk64
+  chmod +x /data/RustDedicated /data/Oxide.Compiler /data/Oxide.Compiler.x86_64 /data/Compiler.x86_64 2>/dev/null || true
+  mkdir -p /data/server/rust/cfg /data/.steam/sdk64 /data/oxide/plugins /data/oxide/config
   if [ -L /data/RustDedicated_Data/Plugins/x86_64/steamclient.so ]; then
     rm -f /data/RustDedicated_Data/Plugins/x86_64/steamclient.so
   fi

@@ -56,28 +56,41 @@ func (c *Controller) Resync(ctx context.Context, reg *repo.Registry, _ *ctrlrunt
 	}
 	c.mu.Unlock()
 
+	tenantDB := tenantdb.NewDB(reg.Pool())
 	var events []mq.Event
 	for _, u := range users.Items {
-		if u == nil {
-			continue
-		}
-		expectedPhase := u.Spec.State
-		if expectedPhase == "" {
-			expectedPhase = iamv1.UserStateActive
-		}
-		hasTenant := true
-		if tenantDB := tenantdb.NewDB(reg.Pool()); tenantDB != nil {
-			if _, tErr := tenantDB.Get(ctx, u.Metadata.Name); errors.Is(tErr, db.ErrNotFound) {
-				hasTenant = false
-			}
-		}
-		if u.Metadata.DeletionTimestamp != nil || u.Metadata.Annotations[iamv1.AnnotationPersonalTenantUID] == "" || !hasTenant || u.Status.ObservedGeneration < u.Metadata.Generation || u.Status.DefaultTenant == "" || u.Status.Phase != expectedPhase {
+		if needsUserReconcile(ctx, tenantDB, u) {
 			ev := mq.NewEvent(mq.EventReconcile, iamv1.GroupVersion, "User", "", u.Metadata.Name, u.Metadata.Generation, u.Metadata.ResourceVersion)
 			ev.Topic = mq.TopicUser
 			events = append(events, ev)
 		}
 	}
 	return events, nil
+}
+
+func needsUserReconcile(ctx context.Context, tenantDB *tenantdb.DB, u *iamv1.User) bool {
+	if u == nil {
+		return false
+	}
+	expectedPhase := u.Spec.State
+	if expectedPhase == "" {
+		expectedPhase = iamv1.UserStateActive
+	}
+	if u.Metadata.DeletionTimestamp != nil || u.Status.ObservedGeneration < u.Metadata.Generation || u.Status.Phase != expectedPhase {
+		return true
+	}
+	if usermodel.PersonalTenantDisabled(u) {
+		return false
+	}
+	if u.Metadata.Annotations[iamv1.AnnotationPersonalTenantUID] == "" || u.Status.DefaultTenant == "" {
+		return true
+	}
+	if tenantDB != nil {
+		if _, err := tenantDB.Get(ctx, u.Metadata.Name); errors.Is(err, db.ErrNotFound) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Controller) Reconcile(ctx context.Context, reg *repo.Registry, bus mq.Interface, _ *ctrlruntime.Config, event mq.Event) error {
@@ -118,16 +131,18 @@ func (c *Controller) Reconcile(ctx context.Context, reg *repo.Registry, bus mq.I
 	if expectedPhase == "" {
 		expectedPhase = iamv1.UserStateActive
 	}
-	if cur.Status.ObservedGeneration < cur.Metadata.Generation || cur.Status.DefaultTenant == "" || cur.Status.Phase != expectedPhase {
+	disabled := usermodel.PersonalTenantDisabled(cur)
+	needsDefaultTenant := !disabled && cur.Status.DefaultTenant == ""
+	if cur.Status.ObservedGeneration < cur.Metadata.Generation || needsDefaultTenant || cur.Status.Phase != expectedPhase {
 		cur.Status.ObservedGeneration = cur.Metadata.Generation
-		if cur.Status.DefaultTenant == "" {
+		if needsDefaultTenant {
 			cur.Status.DefaultTenant = cur.Metadata.Name
 		}
 		cur.Status.Phase = expectedPhase
 		if _, uErr := userDB.UpdateStatus(ctx, cur); uErr != nil {
 			return uErr
 		}
-		if bus != nil {
+		if bus != nil && !disabled {
 			_ = bus.Publish(ctx, mq.TopicTenant, mq.NewEvent(mq.EventReconcile, corev1.GroupVersion, "Tenant", "", u.Metadata.Name, 0, ""))
 		}
 	}

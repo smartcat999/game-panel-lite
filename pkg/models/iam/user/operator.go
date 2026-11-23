@@ -156,7 +156,7 @@ func (o *operator) Create(ctx context.Context, user *iamv1.User) (*iamv1.User, e
 		user.Spec.PasswordHash = hash
 		user.Spec.Password = ""
 	}
-	if user.Status.DefaultTenant == "" {
+	if user.Status.DefaultTenant == "" && !PersonalTenantDisabled(user) {
 		user.Status.DefaultTenant = user.Metadata.Name
 	}
 	created, err := o.db.Create(ctx, user)
@@ -416,6 +416,14 @@ func VerifyPassword(hash, plain string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain)) == nil
 }
 
+// PersonalTenantDisabled reports whether automatic personal workspace provisioning is disabled for user.
+func PersonalTenantDisabled(user *iamv1.User) bool {
+	if user == nil || len(user.Metadata.Annotations) == 0 {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(user.Metadata.Annotations[iamv1.AnnotationDisablePersonalTenant]), "true")
+}
+
 func EnsurePersonalTenant(ctx context.Context, reg *repo.Registry, username string) error {
 	current, err := userdb.NewDB(reg.Pool()).Get(ctx, username)
 	if err != nil {
@@ -432,6 +440,9 @@ func EnsurePersonalTenantForUID(ctx context.Context, reg *repo.Registry, usernam
 	if current.Metadata.DeletionTimestamp != nil {
 		return fmt.Errorf("%w: user is terminating", models.ErrConflict)
 	}
+	if PersonalTenantDisabled(current) {
+		return ensureAuthenticatedRole(ctx, reg)
+	}
 	tenantDB := tenantdb.NewDB(reg.Pool())
 	userDB := userdb.NewDB(reg.Pool())
 	tenant, err := tenantDB.Get(ctx, username)
@@ -439,22 +450,7 @@ func EnsurePersonalTenantForUID(ctx context.Context, reg *repo.Registry, usernam
 		if current.Metadata.Annotations[iamv1.AnnotationPersonalTenantUID] != "" {
 			return fmt.Errorf("%w: the user's bound personal tenant is missing", models.ErrConflict)
 		}
-		allUnlimited := []corev1.ResourceName{
-			corev1.ResourceCPU,
-			corev1.ResourceMemory,
-			corev1.ResourceStorage,
-			corev1.ResourceInstances,
-			corev1.ResourceBackups,
-			corev1.ResourceBackupStorage,
-		}
-		candidate := &corev1.Tenant{
-			Metadata: metav1.ObjectMeta{Name: username, Annotations: map[string]string{iamv1.AnnotationOwnerUID: expectedUID}},
-			Spec:     corev1.TenantSpec{DisplayName: username + " Personal", Type: corev1.TenantTypePersonal, Owner: username, UnlimitedQuota: allUnlimited},
-		}
-		tenant, err = tenantDB.Create(ctx, candidate)
-		if errors.Is(err, db.ErrAlreadyExists) {
-			tenant, err = tenantDB.Get(ctx, username)
-		}
+		tenant, err = createPersonalTenantRecord(ctx, tenantDB, username, expectedUID)
 	}
 	if err != nil {
 		return err
@@ -462,21 +458,46 @@ func EnsurePersonalTenantForUID(ctx context.Context, reg *repo.Registry, usernam
 	if !personalTenantOwnedBy(tenant, username, expectedUID) || tenant.Metadata.DeletionTimestamp != nil {
 		return fmt.Errorf("%w: personal tenant belongs to another identity or is terminating", models.ErrConflict)
 	}
-	bound := current.Metadata.Annotations[iamv1.AnnotationPersonalTenantUID]
-	if bound != "" {
-		if bound != tenant.Metadata.UID {
-			return fmt.Errorf("%w: personal tenant identity changed", models.ErrConflict)
-		}
-	} else {
-		setUserAnnotation(current, iamv1.AnnotationPersonalTenantUID, tenant.Metadata.UID)
-		if _, err = userDB.Update(ctx, current); err != nil {
-			return err
-		}
+	if err := syncPersonalTenantBinding(ctx, userDB, current, tenant.Metadata.UID); err != nil {
+		return err
 	}
 	if err := ensureAuthenticatedRole(ctx, reg); err != nil {
 		return err
 	}
 	return tenantrole.EnsureBuiltInRoles(ctx, reg, username, username)
+}
+
+func createPersonalTenantRecord(ctx context.Context, tenantDB *tenantdb.DB, username, expectedUID string) (*corev1.Tenant, error) {
+	allUnlimited := []corev1.ResourceName{
+		corev1.ResourceCPU,
+		corev1.ResourceMemory,
+		corev1.ResourceStorage,
+		corev1.ResourceInstances,
+		corev1.ResourceBackups,
+		corev1.ResourceBackupStorage,
+	}
+	candidate := &corev1.Tenant{
+		Metadata: metav1.ObjectMeta{Name: username, Annotations: map[string]string{iamv1.AnnotationOwnerUID: expectedUID}},
+		Spec:     corev1.TenantSpec{DisplayName: username + " Personal", Type: corev1.TenantTypePersonal, Owner: username, UnlimitedQuota: allUnlimited},
+	}
+	tenant, err := tenantDB.Create(ctx, candidate)
+	if errors.Is(err, db.ErrAlreadyExists) {
+		return tenantDB.Get(ctx, username)
+	}
+	return tenant, err
+}
+
+func syncPersonalTenantBinding(ctx context.Context, userDB *userdb.DB, current *iamv1.User, tenantUID string) error {
+	bound := current.Metadata.Annotations[iamv1.AnnotationPersonalTenantUID]
+	if bound != "" {
+		if bound != tenantUID {
+			return fmt.Errorf("%w: personal tenant identity changed", models.ErrConflict)
+		}
+		return nil
+	}
+	setUserAnnotation(current, iamv1.AnnotationPersonalTenantUID, tenantUID)
+	_, err := userDB.Update(ctx, current)
+	return err
 }
 
 func personalTenantOwnedBy(tenant *corev1.Tenant, username, userUID string) bool {

@@ -20,6 +20,7 @@ func init() {
 		registryv1.UpstreamProviderHTTP,
 		registryv1.UpstreamProviderModrinth,
 		registryv1.UpstreamProviderThunderstore,
+		registryv1.UpstreamProviderUMod,
 		addonmirror.ProviderTerraria,
 		addonmirror.ProviderTModLoader,
 	} {

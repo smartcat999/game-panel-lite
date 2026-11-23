@@ -35,7 +35,7 @@ export function addonBindingMeta(binding?: AppAddonBinding): AddonBindingMeta {
     mode === "tmod_latest" ||
     mode === "dst_local_mods" ||
     mode === "workshop_tree";
-  const isPlugin = !isSteam && (mode === "" || mode === "flat_dir") && targetLeaf !== "mods";
+  const isPlugin = !isSteam && (mode === "" || mode === "flat_dir" || mode === "oxide") && targetLeaf !== "mods";
   const noun = isPlugin ? "插件" : "模组";
   const marketLabel = isSteam ? "创意工坊" : isPlugin ? "插件市场" : "模组市场";
   return {

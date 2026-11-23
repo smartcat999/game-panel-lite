@@ -131,7 +131,7 @@ func (o *operator) enrichPersistedPackage(ctx context.Context, persisted *regist
 	if repoObj.Spec.Format == registryv1.FormatServerPackage {
 		return o.enrichServerProxyPackage(ctx, repoObj, persisted)
 	}
-	if gameVersion != "" || repoObj.Spec.Format == registryv1.FormatThunderstoreMod {
+	if gameVersion != "" || repoObj.Spec.Format == registryv1.FormatThunderstoreMod || repoObj.Spec.Format == registryv1.FormatUModPlugin {
 		if live := o.overlayGameVersionProxyPackage(ctx, repoObj, persisted, gameVersion); live != nil {
 			return o.signPackageIcon(ctx, repoObj, live)
 		}

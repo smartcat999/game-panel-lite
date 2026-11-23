@@ -149,8 +149,9 @@ export function AddonConfigModal({
   const installMode = addon?.installMode || "";
   const isTMod = installMode === "tmod_latest";
   const isBepInEx = installMode === "bepinex";
+  const isOxide = installMode === "oxide";
   const isFlatDir = installMode === "flat_dir" || installMode === "";
-  const isFileMode = schema.length === 0 && (isTMod || isBepInEx || isFlatDir);
+  const isFileMode = schema.length === 0 && (isTMod || isBepInEx || isOxide || isFlatDir);
 
   // ----------------------------- Schema Form State -----------------------------
   const [schemaDraft, setSchemaDraft] = useState<Record<string, string>>({});
@@ -323,6 +324,30 @@ export function AddonConfigModal({
         const paths = hits.map((name) => `${configDir}/${name}`);
         setMatchedFiles(paths);
         setSelectedFile((prev) => (prev && paths.includes(prev) ? prev : (paths[0] || "")));
+      } else if (isOxide) {
+        const baseDir = (addon.targetDir || "oxide").replace(/^\/+|\/+$/g, "") || "oxide";
+        const configDir = `${baseDir}/config`;
+        const res = await listDirIfPresent(listFiles, configDir);
+        const allCfgs = res.entries
+          .filter((e) => !e.isDir && isEditablePluginConfig(e.name))
+          .map((e) => e.name)
+          .sort((a, b) => a.localeCompare(b));
+        const tokens = [
+          normalizeToken(addon.package),
+          normalizeToken(displayTitle),
+          normalizeToken((artifact?.status?.descriptor?.fileName || "").replace(/\.cs$/i, "")),
+        ].filter((tok) => tok.length >= 3);
+        let hits = allCfgs.filter((name) => {
+          const tok = normalizeToken(name.replace(CONFIG_EXT_RE, ""));
+          return tok !== "" && tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok));
+        });
+        if (hits.length === 0 && allCfgs.length > 0) {
+          hits = allCfgs;
+          setFuzzyNotice(`未精确匹配到单一配置文件，已列出 ${configDir} 目录中的全部配置文件。`);
+        }
+        const paths = hits.map((name) => `${configDir}/${name}`);
+        setMatchedFiles(paths);
+        setSelectedFile((prev) => (prev && paths.includes(prev) ? prev : (paths[0] || "")));
       } else {
         const baseDir = (addon.targetDir || "plugins").replace(/^\/+|\/+$/g, "") || "plugins";
         const res = await listDirIfPresent(listFiles, baseDir);
@@ -359,11 +384,16 @@ export function AddonConfigModal({
     } finally {
       setFilesLoading(false);
     }
-  }, [open, addon, isFileMode, isTMod, isBepInEx, listFiles, modIds, displayTitle]);
+  }, [open, addon, isFileMode, isTMod, isBepInEx, isOxide, listFiles, modIds, displayTitle, artifact?.status?.descriptor?.fileName]);
 
   useEffect(() => {
     void scanWorkspaceConfigs();
   }, [scanWorkspaceConfigs]);
+
+  const isJsonFormTarget = useMemo(
+    () => isTMod || (isOxide && selectedFile.toLowerCase().endsWith(".json")),
+    [isTMod, isOxide, selectedFile],
+  );
 
   useEffect(() => {
     if (!open || !isFileMode || !selectedFile) {
@@ -380,13 +410,13 @@ export function AddonConfigModal({
         if (cancelled) return;
         setFileContent(text);
         setFileSavedContent(text);
-        const parsed = isTMod ? parsePlainJsonObject(text) : null;
+        const parsed = isJsonFormTarget ? parsePlainJsonObject(text) : null;
         const primitiveCount = parsed
           ? Object.values(parsed).filter(
               (v) => typeof v === "boolean" || typeof v === "number" || typeof v === "string",
             ).length
           : 0;
-        setFileEditView(isTMod && primitiveCount > 0 ? "form" : "json");
+        setFileEditView(isJsonFormTarget && primitiveCount > 0 ? "form" : "json");
       })
       .catch((err) => {
         if (cancelled) return;
@@ -398,11 +428,11 @@ export function AddonConfigModal({
     return () => {
       cancelled = true;
     };
-  }, [open, isFileMode, selectedFile, readFile, isTMod]);
+  }, [open, isFileMode, selectedFile, readFile, isJsonFormTarget]);
 
   const parsedJsonObj = useMemo(
-    () => (isTMod ? parsePlainJsonObject(fileContent) : null),
-    [fileContent, isTMod],
+    () => (isJsonFormTarget ? parsePlainJsonObject(fileContent) : null),
+    [fileContent, isJsonFormTarget],
   );
 
   const primitiveJsonKeys = useMemo(() => {
@@ -424,7 +454,7 @@ export function AddonConfigModal({
 
   const handleSaveFile = useCallback(async () => {
     if (!selectedFile || fileSaving) return;
-    if (isTMod && selectedFile.toLowerCase().endsWith(".json")) {
+    if (isJsonFormTarget && selectedFile.toLowerCase().endsWith(".json")) {
       if (!parsePlainJsonObject(fileContent)) {
         try {
           JSON.parse(fileContent);
@@ -446,7 +476,7 @@ export function AddonConfigModal({
     } finally {
       setFileSaving(false);
     }
-  }, [fileContent, fileSaving, isTMod, onClose, running, selectedFile, toast, writeFile]);
+  }, [fileContent, fileSaving, isJsonFormTarget, onClose, running, selectedFile, toast, writeFile]);
 
   const handleCreateTModFile = useCallback(async () => {
     if (creatingBusy) return;
@@ -541,7 +571,7 @@ export function AddonConfigModal({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {isTMod && selectedFile && !creatingOpen && (
+          {isJsonFormTarget && selectedFile && !creatingOpen && (
             <Segmented
               label="编辑视图"
               value={fileEditView}
@@ -759,7 +789,9 @@ export function AddonConfigModal({
             body={
               isTMod
                 ? "tModLoader 仅在模组配置与默认值不同或游戏内保存过配置后，才会在 SaveData/ModConfigs 目录生成 JSON 配置文件。你也可以手动新建配置文件。"
-                : `首次启动服务器加载该${noun}后，将在 ${(addon.targetDir || "plugins").replace(/^\/+|\/+$/g, "") || "plugins"} 目录自动生成对应的配置文件。`
+                : isOxide || isBepInEx
+                  ? `首次启动服务器加载该${noun}后，将在 ${(addon.targetDir || (isOxide ? "oxide" : "BepInEx")).replace(/^\/+|\/+$/g, "")}/config 目录自动生成对应的配置文件。`
+                  : `首次启动服务器加载该${noun}后，将在 ${(addon.targetDir || "plugins").replace(/^\/+|\/+$/g, "") || "plugins"} 目录自动生成对应的配置文件。`
             }
             action={
               isTMod ? (
@@ -811,7 +843,7 @@ export function AddonConfigModal({
             {fileParseError && (
               <p className="rounded-xl bg-[#FEF3F2] px-3.5 py-2 text-xs text-[#B42318]">{fileParseError}</p>
             )}
-            {isTMod && fileEditView === "form" ? (
+            {isJsonFormTarget && fileEditView === "form" ? (
               primitiveJsonKeys.length > 0 ? (
                 <div className="divide-y divide-[#EEF0F7]">
                   {primitiveJsonKeys.map(([key, val]) => (
