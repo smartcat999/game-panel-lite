@@ -1282,24 +1282,32 @@ export default function AdminRegistryPage() {
                           </td>
                           <td className="px-4 py-4 tabular-nums text-[#5B6075]">
                             {activeArt ? (
-                              <div className="flex flex-col gap-1 pr-2">
+                              <div className="flex max-w-[200px] flex-col gap-1.5">
+                                <div className="flex items-center justify-between gap-2 text-xs leading-4">
+                                  <span
+                                    className="truncate font-medium text-[#5B6075]"
+                                    title={activeArt.spec.version}
+                                  >
+                                    {activeArt.spec.version}
+                                  </span>
+                                  <span className="shrink-0 tabular-nums text-[#8A90A6]">
+                                    {activeTelemetry}
+                                  </span>
+                                </div>
                                 {isIndeterminate ? (
                                   <progress
                                     max={100}
-                                    className="gp-progress w-full"
+                                    className="gp-progress h-[5px] w-full"
                                     aria-label="同步进度"
                                   />
                                 ) : (
                                   <progress
                                     max={100}
                                     value={Math.min(100, Math.max(0, activeProgress))}
-                                    className="gp-progress w-full"
+                                    className="gp-progress h-[5px] w-full"
                                     aria-label="同步进度"
                                   />
                                 )}
-                                <span className="truncate text-[11px] text-[#8A90A6]">
-                                  {activeArt.spec.version} · {activeTelemetry}
-                                </span>
                               </div>
                             ) : (
                               <span className="block truncate" title={fullVersionTitle}>
