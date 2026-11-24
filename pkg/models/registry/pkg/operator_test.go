@@ -7,11 +7,14 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	metav1 "github.com/smartcat999/game-panel-cloud/pkg/apis/meta/v1"
 	registryv1 "github.com/smartcat999/game-panel-cloud/pkg/apis/registry/v1"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror"
+	"github.com/smartcat999/game-panel-cloud/pkg/infra/cache"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/db"
 	pkgdb "github.com/smartcat999/game-panel-cloud/pkg/repo/registry/pkg"
 	repositorydb "github.com/smartcat999/game-panel-cloud/pkg/repo/registry/repository"
@@ -483,6 +486,110 @@ func seedUModProxyPackage(t *testing.T, ctx context.Context, fix testpg.Fixture,
 		LatestVersion: "2.2.77",
 	}); err != nil {
 		t.Fatalf("Create package: %v", err)
+	}
+}
+
+type mockPkgCache struct {
+	mu   sync.RWMutex
+	data map[string]string
+}
+
+func (m *mockPkgCache) Get(_ context.Context, k string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	v, ok := m.data[k]
+	if !ok {
+		return "", cache.ErrNotFound
+	}
+	return v, nil
+}
+func (m *mockPkgCache) Set(_ context.Context, k, v string, _ time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.data[k] = v
+	return nil
+}
+func (m *mockPkgCache) Delete(_ context.Context, k string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.data, k)
+	return nil
+}
+func (m *mockPkgCache) Exists(_ context.Context, k string) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, ok := m.data[k]
+	return ok, nil
+}
+func (m *mockPkgCache) Ping(_ context.Context) error { return nil }
+func (m *mockPkgCache) Close() error                 { return nil }
+
+func TestHydratePersistedPackagePersistsRawIconAndCoolsDown(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/mmsource-latest-linux":
+			_, _ = w.Write([]byte("mmsource-2.0.0-git1491-linux.tar.gz\n"))
+		case "/repos/roflmuffin/CounterStrikeSharp/releases":
+			_, _ = w.Write([]byte(`[{"tag_name":"v1.0.381","assets":[{"name":"counterstrikesharp-with-runtime-linux-1.0.381.zip","browser_download_url":"https://dl/css.zip","size":100}]}]`))
+		case "/repos/roflmuffin/CounterStrikeSharp":
+			_, _ = w.Write([]byte(`{"full_name":"roflmuffin/CounterStrikeSharp","description":"CSS","owner":{"login":"roflmuffin","avatar_url":"https://avatars.githubusercontent.com/u/4160975?v=4"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	fix := testpg.New(t, nil)
+	ctx := context.Background()
+	seedCS2HydrationPackages(t, ctx, fix, srv.URL)
+
+	kv := &mockPkgCache{data: make(map[string]string)}
+	op := NewOperator(fix.Registry, kv)
+	list, err := op.List(ctx, db.ListOptions{FieldSelector: map[string]string{"cached": "true", "refresh": "true"}})
+	if err != nil || len(list.Items) != 2 {
+		t.Fatalf("List refresh failed: %v %+v", err, list)
+	}
+	for _, item := range list.Items {
+		if !strings.Contains(item.IconURL, "/icon?u=") {
+			t.Fatalf("expected signed proxy icon in API response for %s, got %q", item.Package, item.IconURL)
+		}
+	}
+	storedMMS, err := pkgdb.NewDB(fix.Pool).Get(ctx, "cs2-plugins.metamod")
+	if err != nil || storedMMS.IconURL != addonmirror.DefaultGitHubAvatarBaseURL+"/alliedmodders?s=128" || !strings.Contains(storedMMS.Title, "Metamod:Source") {
+		t.Fatalf("expected hydrated metamod persisted with raw icon & title, got %#v err=%v", storedMMS, err)
+	}
+	storedCSS, err := pkgdb.NewDB(fix.Pool).Get(ctx, "cs2-plugins.counterstrikesharp")
+	if err != nil || storedCSS.IconURL != "https://avatars.githubusercontent.com/u/4160975?v=4" {
+		t.Fatalf("expected hydrated counterstrikesharp persisted with raw icon, got %#v err=%v", storedCSS, err)
+	}
+	if noopMerged, changed := mergeHydratedPackageMetadata(storedCSS, storedCSS); changed || noopMerged.IconURL != storedCSS.IconURL {
+		t.Fatalf("expected identical metadata merge to report changed=false")
+	}
+}
+
+func seedCS2HydrationPackages(t *testing.T, ctx context.Context, fix testpg.Fixture, endpoint string) {
+	t.Helper()
+	if _, err := upstreamdb.NewDB(fix.Pool).Create(ctx, &registryv1.Upstream{
+		Metadata: metav1.ObjectMeta{Name: "up-cs2p-hydrate"},
+		Provider: registryv1.UpstreamProviderCS2Plugins,
+		Endpoint: endpoint,
+	}); err != nil {
+		t.Fatalf("Create upstream: %v", err)
+	}
+	if _, err := repositorydb.NewDB(fix.Pool).Create(ctx, &registryv1.Repository{
+		Metadata: metav1.ObjectMeta{Name: "cs2-plugins"},
+		Spec:     registryv1.RepositorySpec{Mode: registryv1.RepositoryModeProxy, Format: registryv1.FormatCS2Plugin, UpstreamName: "up-cs2p-hydrate"},
+	}); err != nil {
+		t.Fatalf("Create repo: %v", err)
+	}
+	for _, pkg := range []*registryv1.Package{
+		{Metadata: metav1.ObjectMeta{Name: "cs2-plugins.metamod"}, Repository: "cs2-plugins", Package: "metamod", Title: "metamod", LatestVersion: "2.0.0-git1491"},
+		{Metadata: metav1.ObjectMeta{Name: "cs2-plugins.counterstrikesharp"}, Repository: "cs2-plugins", Package: "counterstrikesharp", Title: "CounterStrikeSharp", Author: "roflmuffin", LatestVersion: "v1.0.381"},
+	} {
+		if _, err := pkgdb.NewDB(fix.Pool).Create(ctx, pkg); err != nil {
+			t.Fatalf("Create pkg: %v", err)
+		}
 	}
 }
 

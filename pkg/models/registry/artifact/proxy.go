@@ -261,12 +261,36 @@ func applyMirrorItemToPackage(pkg *registryv1.Package, it *addonmirror.Item) {
 	if pkg == nil || it == nil {
 		return
 	}
-	if it.Title != "" {
+	if strings.TrimSpace(it.Title) != "" {
 		pkg.Title = it.Title
 	}
-	pkg.Summary, pkg.Description, pkg.Author = it.Summary, it.Description, it.Author
-	pkg.IconURL, pkg.GalleryURLs, pkg.SourceURL = it.IconURL, it.GalleryURLs, it.SourceURL
-	pkg.Downloads, pkg.UpdatedAt, pkg.Tags = it.Downloads, it.UpdatedAt, it.Tags
+	if strings.TrimSpace(it.Summary) != "" {
+		pkg.Summary = it.Summary
+	}
+	if strings.TrimSpace(it.Description) != "" {
+		pkg.Description = it.Description
+	}
+	if strings.TrimSpace(it.Author) != "" {
+		pkg.Author = it.Author
+	}
+	if strings.TrimSpace(it.IconURL) != "" {
+		pkg.IconURL = it.IconURL
+	}
+	if len(it.GalleryURLs) > 0 {
+		pkg.GalleryURLs = it.GalleryURLs
+	}
+	if strings.TrimSpace(it.SourceURL) != "" {
+		pkg.SourceURL = it.SourceURL
+	}
+	if it.Downloads > 0 {
+		pkg.Downloads = it.Downloads
+	}
+	if strings.TrimSpace(it.UpdatedAt) != "" {
+		pkg.UpdatedAt = it.UpdatedAt
+	}
+	if len(it.Tags) > 0 {
+		pkg.Tags = it.Tags
+	}
 	if it.SizeBytes > 0 {
 		pkg.SizeBytes = it.SizeBytes
 	}
@@ -276,11 +300,13 @@ func applyMirrorItemToPackage(pkg *registryv1.Package, it *addonmirror.Item) {
 	if len(it.MapFolders) > 0 {
 		pkg.MapFolders = it.MapFolders
 	}
-	deps := make([]registryv1.PackageDependency, 0, len(it.Dependencies))
-	for _, d := range it.Dependencies {
-		deps = append(deps, registryv1.PackageDependency{Package: d.ID, Title: d.Title})
+	if len(it.Dependencies) > 0 {
+		deps := make([]registryv1.PackageDependency, 0, len(it.Dependencies))
+		for _, d := range it.Dependencies {
+			deps = append(deps, registryv1.PackageDependency{Package: d.ID, Title: d.Title})
+		}
+		pkg.Dependencies = deps
 	}
-	pkg.Dependencies = deps
 }
 
 func (o *operator) HydrateMetadata(ctx context.Context, name string) (*registryv1.Artifact, error) {
@@ -336,6 +362,9 @@ func (o *operator) populateArtifactUpstreamMeta(
 	})
 	if err != nil || rel == nil {
 		return false
+	}
+	if rel.Item != nil {
+		o.upsertProxyPackage(ctx, repoObj.Metadata.Name, rel)
 	}
 	return applyResolvedFieldsToStatus(&art.Status, rel.UpstreamURL, !rel.VersionMismatch, rel.PublishedAt, rel.Changelog, rel.Build)
 }

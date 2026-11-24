@@ -177,3 +177,12 @@ func IsDigitsOnly(s string) bool {
 	}
 	return true
 }
+
+// GitHubAvatarURL builds a canonical GitHub owner avatar URL on the allowlisted avatars host.
+func GitHubAvatarURL(owner string) string {
+	trimmed := strings.TrimSpace(owner)
+	if trimmed == "" || strings.ContainsAny(trimmed, "/\\ \t\r\n?&#") {
+		return ""
+	}
+	return DefaultGitHubAvatarBaseURL + "/" + trimmed + "?s=128"
+}

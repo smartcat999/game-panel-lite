@@ -73,6 +73,7 @@ const (
 	DefaultFicsitBaseURL               = "https://api.ficsit.app"
 	DefaultMetamodBaseURL              = "https://mms.alliedmods.net/mmsdrop/2.0"
 	DefaultGitHubAPIBaseURL            = "https://api.github.com"
+	DefaultGitHubAvatarBaseURL         = "https://avatars.githubusercontent.com"
 	DefaultModIOBaseURL                = "https://api.mod.io/v1"
 	DefaultFabricMetaBaseURL           = "https://meta.fabricmc.net"
 	DefaultMojangManifestURL           = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"

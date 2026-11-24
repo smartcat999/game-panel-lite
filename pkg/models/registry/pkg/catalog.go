@@ -18,7 +18,11 @@ import (
 	"github.com/smartcat999/game-panel-cloud/pkg/models"
 )
 
-const upstreamRefreshTimeout = 4 * time.Second
+const (
+	upstreamRefreshTimeout      = 8 * time.Second
+	packageHydrateMissTTL       = 30 * time.Minute
+	packageHydrateMissKeyPrefix = "regpkg:hydrate-miss:"
+)
 
 func (o *operator) mirrorForUpstream(up *registryv1.Upstream, repoObj *registryv1.Repository) (*addonmirror.Service, addonmirror.Source, bool) {
 	if up == nil || repoObj == nil {
@@ -89,6 +93,14 @@ func (o *operator) listProxyCatalog(ctx context.Context, repoObj *registryv1.Rep
 }
 
 func (o *operator) detailProxyPackage(ctx context.Context, repoObj *registryv1.Repository, pkgID, gameVersion string) (*registryv1.Package, error) {
+	return o.detailProxyPackageMode(ctx, repoObj, pkgID, gameVersion, true)
+}
+
+func (o *operator) detailRawProxyPackage(ctx context.Context, repoObj *registryv1.Repository, pkgID, gameVersion string) (*registryv1.Package, error) {
+	return o.detailProxyPackageMode(ctx, repoObj, pkgID, gameVersion, false)
+}
+
+func (o *operator) detailProxyPackageMode(ctx context.Context, repoObj *registryv1.Repository, pkgID, gameVersion string, signImages bool) (*registryv1.Package, error) {
 	up, err := o.upstreamDB.Get(ctx, repoObj.Spec.UpstreamName)
 	if err != nil {
 		return nil, db.ErrNotFound
@@ -96,6 +108,9 @@ func (o *operator) detailProxyPackage(ctx context.Context, repoObj *registryv1.R
 	svc, src, ok := o.mirrorForUpstream(up, repoObj)
 	if !ok {
 		return nil, db.ErrNotFound
+	}
+	if !signImages {
+		src.ImageProxyPrefix = ""
 	}
 	it, err := svc.Detail(ctx, src, pkgID, gameVersion)
 	if err != nil {
@@ -374,6 +389,11 @@ func (o *operator) normalizeProxyPackageItems(
 		return
 	}
 	svc, src, ok := o.proxyMirrorForRepo(ctx, repoObj)
+	for i, item := range items {
+		if needsMetadataHydration(repoObj, item) {
+			items[i] = o.hydratePersistedPackage(ctx, repoObj, item)
+		}
+	}
 	var latestMap map[string]string
 	if refreshLatest && ok {
 		latestMap = o.resolveRepoLatestVersions(ctx, svc, src, items)
@@ -381,9 +401,6 @@ func (o *operator) normalizeProxyPackageItems(
 	for i, item := range items {
 		if item == nil {
 			continue
-		}
-		if isStubPackage(item) {
-			item = o.enrichPersistedStub(ctx, repoObj, item)
 		}
 		if liveVer := latestMap[item.Package]; liveVer != "" && !addonmirror.IsLatestAlias(liveVer) && item.LatestVersion != liveVer {
 			item = o.applyLiveLatestVersion(ctx, item, liveVer)
@@ -393,6 +410,101 @@ func (o *operator) normalizeProxyPackageItems(
 		}
 		items[i] = item
 	}
+}
+
+func (o *operator) hydratePersistedPackage(
+	ctx context.Context,
+	repoObj *registryv1.Repository,
+	persisted *registryv1.Package,
+) *registryv1.Package {
+	if !needsMetadataHydration(repoObj, persisted) {
+		return persisted
+	}
+	if o.isHydrateMissCached(ctx, persisted.Metadata.Name) {
+		return persisted
+	}
+	rawDetailed, err := o.detailRawProxyPackage(ctx, repoObj, persisted.Package, "")
+	if err != nil || rawDetailed == nil {
+		return persisted
+	}
+	merged, changed := mergeHydratedPackageMetadata(persisted, rawDetailed)
+	if !changed {
+		o.recordHydrateMiss(ctx, persisted.Metadata.Name)
+		return persisted
+	}
+	return o.persistHydratedPackage(ctx, merged)
+}
+
+func mergeHydratedPackageMetadata(persisted, detailed *registryv1.Package) (*registryv1.Package, bool) {
+	if persisted == nil || detailed == nil {
+		return persisted, false
+	}
+	merged := *persisted
+	changed := false
+	curTitle := strings.TrimSpace(merged.Title)
+	if (curTitle == "" || curTitle == merged.Package) && strings.TrimSpace(detailed.Title) != "" && detailed.Title != curTitle {
+		merged.Title, changed = detailed.Title, true
+	}
+	if strings.TrimSpace(merged.Summary) == "" && strings.TrimSpace(detailed.Summary) != "" {
+		merged.Summary, changed = detailed.Summary, true
+	}
+	if strings.TrimSpace(merged.Description) == "" && strings.TrimSpace(detailed.Description) != "" {
+		merged.Description, changed = detailed.Description, true
+	}
+	if strings.TrimSpace(merged.Author) == "" && strings.TrimSpace(detailed.Author) != "" {
+		merged.Author, changed = detailed.Author, true
+	}
+	if strings.TrimSpace(merged.IconURL) == "" && hasExternalHTTPURL(detailed.IconURL) {
+		merged.IconURL, changed = detailed.IconURL, true
+	}
+	if strings.TrimSpace(merged.SourceURL) == "" && strings.TrimSpace(detailed.SourceURL) != "" {
+		merged.SourceURL, changed = detailed.SourceURL, true
+	}
+	if len(merged.GalleryURLs) == 0 && len(detailed.GalleryURLs) > 0 {
+		merged.GalleryURLs, changed = append([]string(nil), detailed.GalleryURLs...), true
+	}
+	if len(merged.Tags) == 0 && len(detailed.Tags) > 0 {
+		merged.Tags, changed = append([]string(nil), detailed.Tags...), true
+	}
+	if len(merged.Dependencies) == 0 && len(detailed.Dependencies) > 0 {
+		merged.Dependencies, changed = append([]registryv1.PackageDependency(nil), detailed.Dependencies...), true
+	}
+	if strings.TrimSpace(merged.LatestVersion) == "" && strings.TrimSpace(detailed.LatestVersion) != "" {
+		merged.LatestVersion, changed = detailed.LatestVersion, true
+	}
+	if changed {
+		mergePackageLocalMeta(&merged, detailed)
+	}
+	return &merged, changed
+}
+
+func (o *operator) isHydrateMissCached(ctx context.Context, pkgName string) bool {
+	if o.cache == nil || strings.TrimSpace(pkgName) == "" {
+		return false
+	}
+	_, err := o.cache.Get(ctx, packageHydrateMissKeyPrefix+pkgName)
+	return err == nil
+}
+
+func (o *operator) recordHydrateMiss(ctx context.Context, pkgName string) {
+	if o.cache == nil || strings.TrimSpace(pkgName) == "" {
+		return
+	}
+	_ = o.cache.Set(ctx, packageHydrateMissKeyPrefix+pkgName, "1", packageHydrateMissTTL)
+}
+
+func (o *operator) persistHydratedPackage(ctx context.Context, merged *registryv1.Package) *registryv1.Package {
+	if o.db == nil || merged == nil || merged.Metadata.Name == "" || merged.Metadata.ResourceVersion == "" {
+		return merged
+	}
+	updated, err := o.db.Update(ctx, merged)
+	if err != nil {
+		if !errors.Is(err, db.ErrConflict) {
+			log.S().Warnw("failed to persist hydrated package metadata", "package", merged.Metadata.Name, "error", err)
+		}
+		return merged
+	}
+	return updated
 }
 
 func (o *operator) resolveRepoLatestVersions(

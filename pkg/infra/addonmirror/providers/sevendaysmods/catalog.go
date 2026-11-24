@@ -152,6 +152,7 @@ func curatedBaseItem(c curatedMod) driver.Item {
 		Title:       c.Title,
 		Summary:     c.Summary,
 		Author:      c.Author,
+		IconURL:     driver.GitHubAvatarURL(c.Owner),
 		SourceURL:   srcURL,
 		UpstreamURL: srcURL,
 		Tags:        append([]string(nil), c.Tags...),

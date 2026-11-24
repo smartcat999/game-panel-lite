@@ -80,6 +80,7 @@ const (
 	DefaultFicsitBaseURL               = driver.DefaultFicsitBaseURL
 	DefaultMetamodBaseURL              = driver.DefaultMetamodBaseURL
 	DefaultGitHubAPIBaseURL            = driver.DefaultGitHubAPIBaseURL
+	DefaultGitHubAvatarBaseURL         = driver.DefaultGitHubAvatarBaseURL
 	DefaultModIOBaseURL                = driver.DefaultModIOBaseURL
 	maxProxiedImageBytes               = 8 << 20 // 8 MiB
 	maxCachedThumbnailBytes            = 256 << 10

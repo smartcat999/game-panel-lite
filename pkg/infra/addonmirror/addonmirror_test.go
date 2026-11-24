@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-cloud/pkg/config"
+	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/driver"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/steam"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/cache"
 )
@@ -947,8 +948,12 @@ func TestCS2PluginsAndWorkshopMapTags(t *testing.T) {
 			_, _ = w.Write([]byte("mmsource-2.0.0-git1491-linux.tar.gz\n"))
 		case "/repos/roflmuffin/CounterStrikeSharp/releases":
 			_, _ = w.Write([]byte(`[{"tag_name":"v1.0.380","assets":[{"name":"counterstrikesharp-linux-1.0.380.zip","browser_download_url":"https://dl/no-rt.zip","size":10},{"name":"counterstrikesharp-with-runtime-linux-1.0.380.zip","browser_download_url":"https://dl/css-rt.zip","size":52}]}]`))
+		case "/repos/roflmuffin/CounterStrikeSharp":
+			_, _ = w.Write([]byte(`{"full_name":"roflmuffin/CounterStrikeSharp","description":"CSS runtime","owner":{"login":"roflmuffin","avatar_url":"https://avatars.githubusercontent.com/u/4160975?v=4"}}`))
 		case "/repos/shobhit-pathak/MatchZy/releases":
 			_, _ = w.Write([]byte(`[{"tag_name":"0.9.3","assets":[{"name":"MatchZy-0.9.3-with-cssharp-linux.zip","browser_download_url":"https://dl/mz-bundle.zip","size":70},{"name":"MatchZy-0.9.3.zip","browser_download_url":"https://dl/mz.zip","size":17}]}]`))
+		case "/repos/shobhit-pathak/MatchZy":
+			http.Error(w, "rate limit exceeded", http.StatusForbidden)
 		default:
 			http.NotFound(w, r)
 		}
@@ -958,16 +963,19 @@ func TestCS2PluginsAndWorkshopMapTags(t *testing.T) {
 	svc := New(&unitTestCache{data: make(map[string]string)}, Options{SigningSecret: "sec"})
 	src := Source{Provider: ProviderCS2Plugins, Endpoint: srv.URL, Format: FormatCS2Plugin}
 	mms, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "metamod", Version: "latest"})
-	if err != nil || mms.Version != "2.0.0-git1491" || mms.ArchiveFormat != ArchiveFormatTarGz {
+	if err != nil || mms.Version != "2.0.0-git1491" || mms.ArchiveFormat != ArchiveFormatTarGz || mms.Item == nil || mms.Item.IconURL != DefaultGitHubAvatarBaseURL+"/alliedmodders?s=128" {
 		t.Fatalf("unexpected metamod release: %#v err=%v", mms, err)
 	}
 	css, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "counterstrikesharp"})
-	if err != nil || css.FileName != "counterstrikesharp-with-runtime-linux-1.0.380.zip" || len(css.Dependencies) != 1 || css.Dependencies[0].ID != "metamod" {
+	if err != nil || css.FileName != "counterstrikesharp-with-runtime-linux-1.0.380.zip" || len(css.Dependencies) != 1 || css.Dependencies[0].ID != "metamod" || css.Item == nil || css.Item.IconURL != "https://avatars.githubusercontent.com/u/4160975?v=4" {
 		t.Fatalf("unexpected css release: %#v err=%v", css, err)
 	}
 	mz, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "shobhit-pathak--MatchZy"})
-	if err != nil || mz.FileName != "MatchZy-0.9.3.zip" {
-		t.Fatalf("expected MatchZy standalone plugin zip without cssharp bundle, got %#v err=%v", mz, err)
+	if err != nil || mz.FileName != "MatchZy-0.9.3.zip" || mz.Item == nil || mz.Item.IconURL != DefaultGitHubAvatarBaseURL+"/shobhit-pathak?s=128" {
+		t.Fatalf("expected MatchZy standalone plugin zip and owner avatar fallback, got %#v err=%v", mz, err)
+	}
+	if driver.GitHubAvatarURL("roflmuffin") != DefaultGitHubAvatarBaseURL+"/roflmuffin?s=128" || driver.GitHubAvatarURL("bad/owner") != "" {
+		t.Fatalf("unexpected GitHubAvatarURL helper output")
 	}
 	q := steam.BuildQueryParams("k", SteamAppCS2, SearchParams{Query: "mirage", Page: 1, Limit: 10})
 	if q.Get("requiredtags[0]") != "Map" {
@@ -999,8 +1007,8 @@ func TestSevenDaysModsProvider(t *testing.T) {
 		t.Fatalf("unexpected sevendaysmods search: %#v err=%v", res, err)
 	}
 	rel, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "ZehMatt--7dtd-WalkerSim2", Version: "latest"})
-	if err != nil || rel.FileName != "WalkerSim2-2.0.5.zip" || rel.Version != "2.0.5" {
-		t.Fatalf("expected non-Editor mod zip for WalkerSim2, got %#v err=%v", rel, err)
+	if err != nil || rel.FileName != "WalkerSim2-2.0.5.zip" || rel.Version != "2.0.5" || rel.Item == nil || rel.Item.IconURL != DefaultGitHubAvatarBaseURL+"/ZehMatt?s=128" {
+		t.Fatalf("expected non-Editor mod zip and avatar for WalkerSim2, got %#v err=%v", rel, err)
 	}
 }
 
