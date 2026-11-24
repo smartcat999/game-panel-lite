@@ -131,13 +131,13 @@ func (o *operator) enrichPersistedPackage(ctx context.Context, persisted *regist
 	if repoObj.Spec.Format == registryv1.FormatServerPackage {
 		return o.enrichServerProxyPackage(ctx, repoObj, persisted)
 	}
+	if needsMetadataHydration(repoObj, persisted) {
+		persisted = o.hydratePersistedPackage(ctx, repoObj, persisted)
+	}
 	if gameVersion != "" || repoObj.Spec.Format == registryv1.FormatThunderstoreMod || repoObj.Spec.Format == registryv1.FormatUModPlugin || repoObj.Spec.Format == registryv1.FormatFicsitMod || repoObj.Spec.Format == registryv1.FormatCS2Plugin || repoObj.Spec.Format == registryv1.FormatSevenDaysMod || repoObj.Spec.Format == registryv1.FormatModIOMod {
 		if live := o.overlayGameVersionProxyPackage(ctx, repoObj, persisted, gameVersion); live != nil {
 			return o.signPackageIcon(ctx, repoObj, live)
 		}
-	}
-	if isStubPackage(persisted) {
-		persisted = o.enrichPersistedStub(ctx, repoObj, persisted)
 	}
 	return o.signPackageIcon(ctx, repoObj, persisted)
 }
@@ -174,16 +174,14 @@ func isStubPackage(p *registryv1.Package) bool {
 	return (title == "" || title == p.Package) && strings.TrimSpace(p.IconURL) == "" && strings.TrimSpace(p.Description) == ""
 }
 
-func (o *operator) enrichPersistedStub(ctx context.Context, repoObj *registryv1.Repository, persisted *registryv1.Package) *registryv1.Package {
-	detailed, err := o.detailProxyPackage(ctx, repoObj, persisted.Package, "")
-	if err != nil || detailed == nil {
-		return persisted
+func needsMetadataHydration(repoObj *registryv1.Repository, p *registryv1.Package) bool {
+	if p == nil || repoObj == nil || repoObj.Spec.Mode != registryv1.RepositoryModeProxy {
+		return false
 	}
-	merged := mergePersistedPackageForDetail(persisted, detailed)
-	if merged.LatestVersion == "" {
-		merged.LatestVersion = persisted.LatestVersion
+	if repoObj.Spec.Format == registryv1.FormatServerPackage {
+		return false
 	}
-	return merged
+	return isStubPackage(p) || strings.TrimSpace(p.IconURL) == ""
 }
 
 func (o *operator) Create(ctx context.Context, in *registryv1.Package) (*registryv1.Package, error) {

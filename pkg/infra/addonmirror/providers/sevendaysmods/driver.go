@@ -240,7 +240,14 @@ func defaultModItem(canonID, owner, repo string) driver.Item {
 		return curatedBaseItem(c)
 	}
 	ghURL := "https://github.com/" + owner + "/" + repo
-	return driver.Item{ID: canonID, Title: repo, Author: owner, SourceURL: ghURL, UpstreamURL: ghURL}
+	return driver.Item{
+		ID:          canonID,
+		Title:       repo,
+		Author:      owner,
+		IconURL:     driver.GitHubAvatarURL(owner),
+		SourceURL:   ghURL,
+		UpstreamURL: ghURL,
+	}
 }
 
 func applyRepoInfo(item *driver.Item, info *ghRepoInfo) {
@@ -275,7 +282,7 @@ func resolveRelease(ctx context.Context, rt driver.Runtime, src driver.Source, r
 		return nil, driver.ErrNotFound
 	}
 	canonID := toCanonicalPackageID(owner, repo)
-	item := buildGitHubItem(canonID, owner, repo, rels, nil)
+	item := buildGitHubItem(canonID, owner, repo, rels, fetchRepoInfo(ctx, rt, src, owner, repo))
 	return &driver.ResolvedRelease{
 		Package:       canonID,
 		Version:       rel.TagName,

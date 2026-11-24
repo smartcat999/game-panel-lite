@@ -205,6 +205,34 @@ func TestGetExistingFailedProxyArtifactDoesNotRequeueUntilRetryAnnotation(t *tes
 	}
 }
 
+func TestApplyMirrorItemToPackageDoesNotClobberPopulatedFields(t *testing.T) {
+	pkg := &registryv1.Package{
+		Repository: "cs2-plugins",
+		Package:    "counterstrikesharp",
+		Title:      "CounterStrikeSharp",
+		Summary:    "Existing summary",
+		Author:     "roflmuffin",
+		IconURL:    "https://avatars.githubusercontent.com/u/4160975?v=4",
+		Tags:       []string{"framework"},
+	}
+	applyMirrorItemToPackage(pkg, &addonmirror.Item{
+		ID:      "counterstrikesharp",
+		Summary: "",
+		Author:  "",
+		IconURL: "",
+	})
+	if pkg.Summary != "Existing summary" || pkg.Author != "roflmuffin" || pkg.IconURL != "https://avatars.githubusercontent.com/u/4160975?v=4" || len(pkg.Tags) != 1 {
+		t.Fatalf("unexpectedly clobbered populated package metadata: %#v", pkg)
+	}
+	applyMirrorItemToPackage(pkg, &addonmirror.Item{
+		ID:      "counterstrikesharp",
+		IconURL: "https://avatars.githubusercontent.com/roflmuffin?s=128",
+	})
+	if pkg.IconURL != "https://avatars.githubusercontent.com/roflmuffin?s=128" {
+		t.Fatalf("expected non-empty IconURL update, got %q", pkg.IconURL)
+	}
+}
+
 func TestMain(m *testing.M) {
 	code := m.Run()
 	testpg.Stop()

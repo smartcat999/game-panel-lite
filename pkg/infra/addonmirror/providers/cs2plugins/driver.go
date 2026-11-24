@@ -297,6 +297,7 @@ func defaultPluginItem(canonID, owner, repo string) driver.Item {
 		ID:           canonID,
 		Title:        repo,
 		Author:       owner,
+		IconURL:      driver.GitHubAvatarURL(owner),
 		SourceURL:    ghURL,
 		UpstreamURL:  ghURL,
 		Dependencies: []driver.Dependency{{ID: PackageCounterStrikeSharp, Title: "CounterStrikeSharp (.NET 运行时插件框架)"}},
@@ -338,7 +339,7 @@ func resolveRelease(ctx context.Context, rt driver.Runtime, src driver.Source, r
 		return nil, driver.ErrNotFound
 	}
 	canonID := toCanonicalPackageID(owner, repo)
-	item := buildGitHubItem(canonID, owner, repo, isCSS, rels, nil)
+	item := buildGitHubItem(canonID, owner, repo, isCSS, rels, fetchRepoInfo(ctx, rt, src, owner, repo))
 	return &driver.ResolvedRelease{
 		Package:       canonID,
 		Version:       rel.TagName,

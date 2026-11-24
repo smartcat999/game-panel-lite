@@ -25,6 +25,7 @@ type curatedPlugin struct {
 var curatedCatalog = []curatedPlugin{
 	{
 		ID:      PackageMetamod,
+		Owner:   "alliedmodders",
 		Title:   "Metamod:Source 2.0 (CS2 插件加载框架)",
 		Summary: "Counter-Strike 2 核心底层加载器，CounterStrikeSharp 与多数服务端插件的必需前置。",
 		Author:  "AlliedModders",
@@ -145,6 +146,7 @@ func curatedBaseItem(c curatedPlugin) driver.Item {
 		Title:        c.Title,
 		Summary:      c.Summary,
 		Author:       c.Author,
+		IconURL:      driver.GitHubAvatarURL(c.Owner),
 		SourceURL:    srcURL,
 		UpstreamURL:  srcURL,
 		Tags:         append([]string(nil), c.Tags...),
