@@ -80,7 +80,8 @@ type ficsitDriver struct {
 func (d *ficsitDriver) Name() string { return driver.ProviderFicsit }
 
 func (d *ficsitDriver) Capabilities(src driver.Source) driver.Capabilities {
-	return driver.Capabilities{Catalog: src.Format != driver.FormatServerPackage}
+	isCatalog := src.Format != driver.FormatServerPackage
+	return driver.Capabilities{Catalog: isCatalog, LiveDetailOverlay: isCatalog}
 }
 
 func (d *ficsitDriver) ParseTokens(raw string) []string {

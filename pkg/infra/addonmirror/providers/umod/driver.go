@@ -39,7 +39,8 @@ type umodDriver struct {
 func (d *umodDriver) Name() string { return driver.ProviderUMod }
 
 func (d *umodDriver) Capabilities(src driver.Source) driver.Capabilities {
-	return driver.Capabilities{Catalog: src.Format != driver.FormatServerPackage}
+	isCatalog := src.Format != driver.FormatServerPackage
+	return driver.Capabilities{Catalog: isCatalog, LiveDetailOverlay: isCatalog}
 }
 
 func (d *umodDriver) ParseTokens(raw string) []string {

@@ -17,14 +17,6 @@ import (
 
 	"github.com/smartcat999/game-panel-cloud/pkg/config"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/driver"
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/fabricmc"
-	httpdrv "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/http"
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/modrinth"
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/neoforge"
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/papermc"
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/purpur"
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/steam"
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/vanilla"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/cache"
 )
 
@@ -366,6 +358,12 @@ func (s *Service) SupportsCatalog(src Source) bool {
 	return ok && drv.Capabilities(src).Catalog
 }
 
+// SupportsLiveDetailOverlay reports whether persisted packages for src overlay live upstream version metadata.
+func (s *Service) SupportsLiveDetailOverlay(src Source) bool {
+	drv, ok := LookupDriver(src.Provider)
+	return ok && drv.Capabilities(src).LiveDetailOverlay
+}
+
 // ListServerVersions queries official upstream versions for a server_package provider via its registered Driver.
 func (s *Service) ListServerVersions(ctx context.Context, provider, endpoint, pkgName string) ([]string, error) {
 	prov := strings.ToLower(strings.TrimSpace(provider))
@@ -472,52 +470,69 @@ func (s *Service) Resolve(ctx context.Context, src Source, rawInput, gameVersion
 
 // ResolvePaperMC resolves a PaperMC server release version and download URL.
 func (s *Service) ResolvePaperMC(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
-	return papermc.Resolve(ctx, s, endpoint, version)
+	return s.ResolveRelease(ctx, Source{Provider: ProviderPaperMC, Endpoint: endpoint, Format: FormatServerPackage}, ResolveReleaseRequest{Version: version})
 }
 
 // ResolvePurpur resolves a PurpurMC server release version and download URL.
 func (s *Service) ResolvePurpur(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
-	return purpur.Resolve(ctx, s, endpoint, version)
+	return s.ResolveRelease(ctx, Source{Provider: ProviderPurpur, Endpoint: endpoint, Format: FormatServerPackage}, ResolveReleaseRequest{Version: version})
 }
 
 // ResolveVanillaMC resolves an official Mojang Minecraft server jar via piston-meta.
 func (s *Service) ResolveVanillaMC(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
-	return vanilla.Resolve(ctx, s, endpoint, version)
+	return s.ResolveRelease(ctx, Source{Provider: ProviderVanilla, Endpoint: endpoint, Format: FormatServerPackage}, ResolveReleaseRequest{Version: version})
 }
 
 // ResolveVanillaMappings resolves official Mojang ProGuard server mappings (server.txt).
 func (s *Service) ResolveVanillaMappings(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
-	return vanilla.ResolveServerMappings(ctx, s, endpoint, version)
+	return s.ResolveRelease(ctx, Source{Provider: ProviderVanilla, Endpoint: endpoint, Format: FormatServerPackage}, ResolveReleaseRequest{Package: PackageVanillaMappings, Version: version})
 }
 
 // ResolveFabricMC resolves a FabricMC server release and its loader launch profile URL.
 func (s *Service) ResolveFabricMC(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
-	return fabricmc.Resolve(ctx, s, endpoint, version)
+	return s.ResolveRelease(ctx, Source{Provider: ProviderFabricMC, Endpoint: endpoint, Format: FormatServerPackage}, ResolveReleaseRequest{Version: version})
 }
 
 // ResolveNeoForge resolves a NeoForge installer release for the target Minecraft version.
 func (s *Service) ResolveNeoForge(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
-	return neoforge.Resolve(ctx, s, endpoint, version)
+	return s.ResolveRelease(ctx, Source{Provider: ProviderNeoForge, Endpoint: endpoint, Format: FormatServerPackage}, ResolveReleaseRequest{Version: version})
 }
 
 // ResolveHTTPServerRelease resolves specialized HTTP upstreams or generic URL/template releases.
 func (s *Service) ResolveHTTPServerRelease(ctx context.Context, endpoint, pkgName, version, explicitURL string) (*ResolvedRelease, error) {
-	return httpdrv.Resolve(ctx, s, endpoint, pkgName, version, explicitURL)
+	return s.ResolveRelease(ctx, Source{Provider: ProviderHTTP, Endpoint: endpoint, Format: FormatServerPackage}, ResolveReleaseRequest{Package: pkgName, Version: version, SourceURL: explicitURL})
 }
 
 // ResolveModrinthVersion resolves a specific or latest Modrinth project version and its primary .jar download.
 func (s *Service) ResolveModrinthVersion(ctx context.Context, src Source, slugOrID, requestedVersion, gameVersion string) (*ResolvedRelease, error) {
-	return modrinth.Resolve(ctx, s, src, slugOrID, requestedVersion, gameVersion)
+	if strings.TrimSpace(src.Provider) == "" {
+		src.Provider = ProviderModrinth
+	}
+	if src.Format == FormatServerPackage {
+		src.Format = FormatModrinthAddon
+	}
+	return s.ResolveRelease(ctx, src, ResolveReleaseRequest{Package: slugOrID, Version: requestedVersion, GameVersion: gameVersion})
 }
 
 // ResolveSteamWorkshopItem queries live metadata for a Workshop ID.
 func (s *Service) ResolveSteamWorkshopItem(ctx context.Context, appID int, workshopID string) (*Item, error) {
-	return steam.ResolveWorkshopItem(ctx, s, Source{Provider: ProviderSteamWorkshop, SteamAppID: appID}, workshopID)
+	return s.ResolveSteamWorkshopItemWithSource(ctx, Source{Provider: ProviderSteamWorkshop, SteamAppID: appID}, workshopID)
 }
 
 // ResolveSteamWorkshopItemWithSource queries live metadata for a Workshop ID using Source endpoint overrides.
 func (s *Service) ResolveSteamWorkshopItemWithSource(ctx context.Context, src Source, workshopID string) (*Item, error) {
-	return steam.ResolveWorkshopItem(ctx, s, src, workshopID)
+	src.Provider = ProviderSteamWorkshop
+	if src.Format == FormatServerPackage {
+		src.Format = FormatWorkshopMod
+	}
+	rel, err := s.ResolveRelease(ctx, src, ResolveReleaseRequest{Package: workshopID})
+	if err != nil {
+		return nil, err
+	}
+	if rel == nil || rel.Item == nil {
+		return nil, ErrNotFound
+	}
+	return rel.Item, nil
 }
 
 func (s *Service) rewriteResultImages(prefix string, res *Result) {

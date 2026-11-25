@@ -160,10 +160,10 @@ func (r *StageReconciler) ReconcileStep(ctx context.Context, tenant, name string
 	if stepErr != nil {
 		if !errors.Is(stepErr, db.ErrConflict) && ctx.Err() == nil {
 			if current, err := r.db.Get(ctx, tenant, name); err == nil && current.Metadata.UID == uid && current.Metadata.ResourceVersion == rv {
-				reason := "ReconcileError"
+				reason := corev1.ReasonReconcileError
 				message := "Resource reconciliation failed; held resources are retained and the same intent will be retried"
 				if GetStage(current) == StageDeleting && len(current.Status.Backups) > 0 {
-					reason = "BackupCleanupFailed"
+					reason = corev1.ReasonBackupCleanupFailed
 					message = "Backup cleanup failed; backup records and held resources are retained for retry"
 				}
 				if updated, err := r.condition(ctx, current, metav1.ConditionTypeReconciled, metav1.ConditionFalse, reason, message); err == nil {
@@ -176,7 +176,7 @@ func (r *StageReconciler) ReconcileStep(ctx context.Context, tenant, name string
 	if out != nil {
 		for _, condition := range out.Status.Conditions {
 			if condition.Type == metav1.ConditionTypeReconciled && condition.Status == metav1.ConditionFalse {
-				return r.condition(ctx, out, metav1.ConditionTypeReconciled, metav1.ConditionTrue, "ReconcileSucceeded", "A resource-control reconciliation step completed successfully")
+				return r.condition(ctx, out, metav1.ConditionTypeReconciled, metav1.ConditionTrue, corev1.ReasonReconcileSucceeded, "A resource-control reconciliation step completed successfully")
 			}
 		}
 	}
@@ -247,13 +247,13 @@ func (r *StageReconciler) pendingQuota(ctx context.Context, i *corev1.Instance) 
 	class, err := r.runtimeClass(ctx, i)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) || errors.Is(err, corev1.AdmissionDenied) {
-			return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, "RuntimeUnavailable", "The requested runtime class is unavailable")
+			return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, corev1.ReasonRuntimeUnavailable, "The requested runtime class is unavailable")
 		}
 		return i, err
 	}
 	if err := r.syncQuota(ctx, i); err != nil {
 		if errors.Is(err, corev1.AdmissionDenied) {
-			return r.condition(ctx, i, metav1.ConditionTypeQuotaReserved, metav1.ConditionFalse, "AdmissionDenied", err.Error())
+			return r.condition(ctx, i, metav1.ConditionTypeQuotaReserved, metav1.ConditionFalse, corev1.ReasonAdmissionDenied, err.Error())
 		}
 		return i, err
 	}
@@ -275,7 +275,7 @@ func (r *StageReconciler) pendingQuota(ctx context.Context, i *corev1.Instance) 
 	result, err := r.quotaDB.TryGrant(ctx, c.OperationID)
 	if err != nil {
 		if errors.Is(err, corev1.AdmissionDenied) {
-			return r.condition(ctx, i, metav1.ConditionTypeQuotaReserved, metav1.ConditionFalse, "AdmissionDenied", err.Error())
+			return r.condition(ctx, i, metav1.ConditionTypeQuotaReserved, metav1.ConditionFalse, corev1.ReasonAdmissionDenied, err.Error())
 		}
 		return i, err
 	}
@@ -287,7 +287,7 @@ func (r *StageReconciler) pendingQuota(ctx context.Context, i *corev1.Instance) 
 		i.Spec.RuntimeClassName = class.Metadata.Name
 	}
 	i.Status.ResourceControl.Stage = string(StageScheduling)
-	return r.condition(ctx, i, metav1.ConditionTypeQuotaReserved, metav1.ConditionTrue, "Granted", "Initial tenant budget is held")
+	return r.condition(ctx, i, metav1.ConditionTypeQuotaReserved, metav1.ConditionTrue, corev1.ReasonQuotaGranted, "Initial tenant budget is held")
 }
 func nodePolicyVersion(n *corev1.Node) (int64, error) {
 	rv, err := version(n.Metadata.ResourceVersion)
@@ -441,7 +441,7 @@ func (r *StageReconciler) scheduling(ctx context.Context, i *corev1.Instance) (*
 	}
 	if err := r.syncQuota(ctx, i); err != nil {
 		if errors.Is(err, corev1.AdmissionDenied) {
-			return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, "TenantUnavailable", err.Error())
+			return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, corev1.ReasonTenantUnavailable, err.Error())
 		}
 		return i, err
 	}
@@ -468,7 +468,7 @@ func (r *StageReconciler) selectAndPersistCandidateAttempt(ctx context.Context, 
 	node, err := r.choose(ctx, i)
 	if err != nil {
 		if errors.Is(err, corev1.AdmissionDenied) || errors.Is(err, db.ErrNotFound) {
-			return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, "Unschedulable", err.Error())
+			return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, corev1.ReasonUnschedulable, err.Error())
 		}
 		return i, err
 	}
@@ -508,7 +508,7 @@ func (r *StageReconciler) bindPendingCandidateAttempt(ctx context.Context, i *co
 	}
 	if err != nil || n.Metadata.UID != a.NodeUID || classErr != nil || !eligible(n, i, class) {
 		a.Phase = AttemptClosing
-		return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, "CandidateChanged", "Candidate identity or eligibility changed")
+		return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, corev1.ReasonCandidateChanged, "Candidate identity or eligibility changed")
 	}
 	if _, err = r.syncNode(ctx, i); err != nil {
 		return i, err
@@ -532,7 +532,7 @@ func (r *StageReconciler) bindPendingCandidateAttempt(ctx context.Context, i *co
 	result, err := r.nodeDB.TryReserve(ctx, c.OperationID)
 	if err != nil {
 		if errors.Is(err, corev1.AdmissionDenied) {
-			return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, "AdmissionDenied", err.Error())
+			return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionFalse, corev1.ReasonAdmissionDenied, err.Error())
 		}
 		return i, err
 	}
@@ -546,7 +546,7 @@ func (r *StageReconciler) bindPendingCandidateAttempt(ctx context.Context, i *co
 	control.ApprovedPorts = apiPorts(result.AssignedPorts)
 	i.Spec.NodeName = a.NodeName
 	AddFinalizer(&i.Metadata, corev1.FinalizerInstanceCleanup)
-	return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionTrue, "Bound", "Node budget and ports are held for the persisted placement")
+	return r.condition(ctx, i, metav1.ConditionTypeScheduled, metav1.ConditionTrue, corev1.ReasonPlacementBound, "Node budget and ports are held for the persisted placement")
 }
 func (r *StageReconciler) closeCandidate(ctx context.Context, i *corev1.Instance) (*corev1.Instance, error) {
 	if i.Status.ResourceControl.ApprovedRevision != 0 {
@@ -690,7 +690,7 @@ func (r *StageReconciler) cancelResize(ctx context.Context, i *corev1.Instance, 
 	if desired == approved {
 		control.Change = nil
 		control.DesiredRevision = control.ApprovedRevision
-		return r.condition(ctx, i, metav1.ConditionTypeResourcesApproved, metav1.ConditionTrue, "ChangeCancelled", "Pending resource resize was cancelled and reserved budget difference was released")
+		return r.condition(ctx, i, metav1.ConditionTypeResourcesApproved, metav1.ConditionTrue, corev1.ReasonChangeCancelled, "Pending resource resize was cancelled and reserved budget difference was released")
 	}
 	control.DesiredRevision = control.ApprovedRevision + 1
 	control.Change = &corev1.InstanceResourceChange{
@@ -731,7 +731,7 @@ func (r *StageReconciler) budgetResize(ctx context.Context, i *corev1.Instance, 
 		}
 		if err != nil {
 			if errors.Is(err, corev1.AdmissionDenied) {
-				return r.condition(ctx, i, metav1.ConditionTypeResourcesApproved, metav1.ConditionFalse, "QuotaDenied", err.Error())
+				return r.condition(ctx, i, metav1.ConditionTypeResourcesApproved, metav1.ConditionFalse, corev1.ReasonQuotaDenied, err.Error())
 			}
 			return i, err
 		}
@@ -744,7 +744,7 @@ func (r *StageReconciler) budgetResize(ctx context.Context, i *corev1.Instance, 
 		}
 		if err != nil {
 			if errors.Is(err, corev1.AdmissionDenied) {
-				return r.condition(ctx, i, metav1.ConditionTypeResourcesApproved, metav1.ConditionFalse, "NodeDenied", err.Error())
+				return r.condition(ctx, i, metav1.ConditionTypeResourcesApproved, metav1.ConditionFalse, corev1.ReasonNodeDenied, err.Error())
 			}
 			return i, err
 		}
@@ -752,7 +752,7 @@ func (r *StageReconciler) budgetResize(ctx context.Context, i *corev1.Instance, 
 	control.ApprovedResources = corev1.CanonicalResources(qp.Target)
 	control.ApprovedRevision = qp.ToRevision
 	control.Change.Phase = ChangeApplying
-	return r.condition(ctx, i, metav1.ConditionTypeResourcesApproved, metav1.ConditionTrue, "BudgetGranted", "Target resource budget is held in both domains")
+	return r.condition(ctx, i, metav1.ConditionTypeResourcesApproved, metav1.ConditionTrue, corev1.ReasonBudgetGranted, "Target resource budget is held in both domains")
 }
 
 func (r *StageReconciler) settleResize(ctx context.Context, i *corev1.Instance, qp, np pgutil.ResourceChange) (*corev1.Instance, error) {
@@ -793,7 +793,7 @@ func (r *StageReconciler) settleResize(ctx context.Context, i *corev1.Instance, 
 		return i, err
 	}
 	control.Change = nil
-	return r.condition(ctx, i, metav1.ConditionTypeResourcesSettled, metav1.ConditionTrue, "Observed", "Matching runtime observation settled both domain holdings")
+	return r.condition(ctx, i, metav1.ConditionTypeResourcesSettled, metav1.ConditionTrue, corev1.ReasonResourcesObserved, "Matching runtime observation settled both domain holdings")
 }
 func (r *StageReconciler) deleting(ctx context.Context, i *corev1.Instance) (*corev1.Instance, error) {
 	if _, err := r.quotaDB.RequestClose(ctx, quotaCommand(i, corev1.RequestClose)); err != nil {

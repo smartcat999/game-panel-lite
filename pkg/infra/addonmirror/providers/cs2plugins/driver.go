@@ -29,7 +29,8 @@ type cs2PluginsDriver struct {
 func (d *cs2PluginsDriver) Name() string { return driver.ProviderCS2Plugins }
 
 func (d *cs2PluginsDriver) Capabilities(src driver.Source) driver.Capabilities {
-	return driver.Capabilities{Catalog: src.Format != driver.FormatServerPackage}
+	isCatalog := src.Format != driver.FormatServerPackage
+	return driver.Capabilities{Catalog: isCatalog, LiveDetailOverlay: isCatalog}
 }
 
 func (d *cs2PluginsDriver) ParseTokens(raw string) []string {

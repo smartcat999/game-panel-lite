@@ -22,7 +22,7 @@ import { tenantRoute } from "../../../../lib/routes";
 import type { RegistryArtifact } from "../../../../lib/types";
 import { subscribeResourceWatch } from "../../../../lib/ws";
 import { DEFAULT_GAME_COVER, resolveRichApp } from "../../../../lib/presets";
-import { ArtifactLogModal } from "../../../../../components/console/admin/ArtifactLogModal";
+import { ArtifactLogModal, formatArtifactStageLabel } from "../../../../../components/console/admin/ArtifactLogModal";
 import { useServerActions } from "../../../../../components/console/servers/api";
 import { resolveInstanceAlertBanner } from "../../../../../components/console/servers/error-copy";
 import { addonBindingMeta, DeleteServerDialog, gameOf, MoreMenu } from "../../../../../components/console/servers/shared";
@@ -514,7 +514,7 @@ function ServerDetail() {
                       {...(pct > 0 ? { value: Math.min(100, pct) } : {})}
                     />
                     <span className="text-xs text-[#5B6075]">
-                      {primary.status?.stage || "正在拉取资源"}
+                      {formatArtifactStageLabel(primary)}
                       {pct > 0 ? ` · ${pct}%` : ""}
                     </span>
                   </div>

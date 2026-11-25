@@ -1,9 +1,6 @@
 package addonmirror
 
-import (
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/driver"
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/steam"
-)
+import "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/driver"
 
 const (
 	ProviderSteamWorkshop = driver.ProviderSteamWorkshop
@@ -41,7 +38,8 @@ const (
 	ArchiveFormatJar   = driver.ArchiveFormatJar
 	ArchiveFormatTMod  = driver.ArchiveFormatTMod
 
-	SteamCMDScheme = driver.SteamCMDScheme
+	SteamCMDScheme         = driver.SteamCMDScheme
+	PackageVanillaMappings = driver.PackageVanillaMappings
 
 	SortPopular   = driver.SortPopular
 	SortDownloads = driver.SortDownloads
@@ -132,22 +130,6 @@ func RegisterHTTPSubDriver(sub HTTPSubDriver) { driver.RegisterHTTPSubDriver(sub
 // IsLatestAlias reports whether v represents a floating release alias rather than a concrete tag.
 func IsLatestAlias(v string) bool { return driver.IsLatestAlias(v) }
 
-// CleanSteamBBCode converts Steam Workshop BBCode descriptions into plain text.
-func CleanSteamBBCode(raw string) string { return steam.CleanBBCode(raw) }
-
-// FormatSteamBBCodeMarkdown converts Steam Workshop BBCode into clean GFM Markdown.
-func FormatSteamBBCodeMarkdown(raw string) string { return steam.FormatBBCodeMarkdown(raw) }
-
-// SummarizeText returns a single-line plain summary truncated to maxRunes.
-func SummarizeText(cleaned string, maxRunes int) string {
-	return steam.SummarizeText(cleaned, maxRunes)
-}
-
-// ExtractProjectZomboidMeta extracts Mod IDs and Map Folders from a Steam Workshop description.
-func ExtractProjectZomboidMeta(rawDesc string) ([]string, []string) {
-	return steam.ExtractProjectZomboidMeta(rawDesc)
-}
-
 // ParseInputTokens delegates upstream token extraction to the provider's registered Driver.
 func ParseInputTokens(provider, raw string) []string {
 	if drv, ok := LookupDriver(provider); ok {
@@ -157,13 +139,13 @@ func ParseInputTokens(provider, raw string) []string {
 }
 
 // SteamNewsAppID maps a Steam dedicated server tool AppID to its public base game AppID.
-func SteamNewsAppID(appID int) int { return steam.NewsAppID(appID) }
+func SteamNewsAppID(appID int) int { return driver.SteamNewsAppID(appID) }
 
 // SteamNewsURL returns the official Steam News Hub URL for appID.
-func SteamNewsURL(appID int) string { return steam.NewsURL(appID) }
+func SteamNewsURL(appID int) string { return driver.SteamNewsURL(appID) }
 
 // SteamNewsURLFromString parses a decimal Steam AppID string and returns its Steam News Hub URL.
-func SteamNewsURLFromString(raw string) string { return steam.NewsURLFromString(raw) }
+func SteamNewsURLFromString(raw string) string { return driver.SteamNewsURLFromString(raw) }
 
 // NormalizeSteamNewsURL rewrites dedicated-server Steam News URLs to the base game's News Hub URL.
-func NormalizeSteamNewsURL(raw string) string { return steam.NormalizeNewsURL(raw) }
+func NormalizeSteamNewsURL(raw string) string { return driver.NormalizeSteamNewsURL(raw) }

@@ -134,12 +134,20 @@ func (o *operator) enrichPersistedPackage(ctx context.Context, persisted *regist
 	if needsMetadataHydration(repoObj, persisted) {
 		persisted = o.hydratePersistedPackage(ctx, repoObj, persisted)
 	}
-	if gameVersion != "" || repoObj.Spec.Format == registryv1.FormatThunderstoreMod || repoObj.Spec.Format == registryv1.FormatUModPlugin || repoObj.Spec.Format == registryv1.FormatFicsitMod || repoObj.Spec.Format == registryv1.FormatCS2Plugin || repoObj.Spec.Format == registryv1.FormatSevenDaysMod || repoObj.Spec.Format == registryv1.FormatModIOMod {
+	if o.shouldOverlayLiveProxyDetail(ctx, repoObj, gameVersion) {
 		if live := o.overlayGameVersionProxyPackage(ctx, repoObj, persisted, gameVersion); live != nil {
 			return o.signPackageIcon(ctx, repoObj, live)
 		}
 	}
 	return o.signPackageIcon(ctx, repoObj, persisted)
+}
+
+func (o *operator) shouldOverlayLiveProxyDetail(ctx context.Context, repoObj *registryv1.Repository, gameVersion string) bool {
+	if gameVersion != "" {
+		return true
+	}
+	svc, src, ok := o.proxyMirrorForRepo(ctx, repoObj)
+	return ok && svc.SupportsLiveDetailOverlay(src)
 }
 
 func (o *operator) overlayGameVersionProxyPackage(ctx context.Context, repoObj *registryv1.Repository, persisted *registryv1.Package, gameVersion string) *registryv1.Package {

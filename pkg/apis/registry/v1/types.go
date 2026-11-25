@@ -10,7 +10,7 @@ import (
 type Upstream struct {
 	metav1.TypeMeta     `json:",inline"`
 	Metadata            metav1.ObjectMeta `json:"metadata"`
-	Provider            string            `json:"provider"` // papermc | purpur | vanilla | fabricmc | neoforge | modrinth | thunderstore | umod | ficsit | cs2plugins | steam | http
+	Provider            string            `json:"provider"` // papermc | purpur | vanilla | fabricmc | neoforge | modrinth | thunderstore | umod | ficsit | cs2plugins | sevendaysmods | modio | steam | http
 	Endpoint            string            `json:"endpoint,omitempty"`
 	ProxyURL            string            `json:"proxyURL,omitempty"`
 	SteamAppID          int               `json:"steamAppId,omitempty"`
@@ -33,7 +33,7 @@ type RepositorySpec struct {
 	DisplayName     string                     `json:"displayName,omitempty"`
 	Description     string                     `json:"description,omitempty"`
 	Mode            string                     `json:"mode"`   // Hosted | Proxy | Virtual
-	Format          string                     `json:"format"` // server_package | workshop_mod | modrinth_addon | thunderstore_mod | umod_plugin | ficsit_mod | cs2_plugin | generic
+	Format          string                     `json:"format"` // server_package | workshop_mod | modrinth_addon | thunderstore_mod | umod_plugin | ficsit_mod | cs2_plugin | sevendays_mod | modio_mod | generic
 	UpstreamName    string                     `json:"upstreamName,omitempty"`
 	MemberRepos     []string                   `json:"memberRepos,omitempty"`
 	PublicRead      bool                       `json:"publicRead,omitempty"`

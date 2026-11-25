@@ -11,8 +11,9 @@ import (
 
 // Capabilities declares which high-level upstream workflows a provider Driver supports for a given Source.
 type Capabilities struct {
-	Catalog        bool
-	ServerPackages bool
+	Catalog           bool
+	ServerPackages    bool
+	LiveDetailOverlay bool
 }
 
 // ResolveReleaseRequest parameterizes unified artifact/server release resolution across all upstream drivers.

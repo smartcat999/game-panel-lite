@@ -36,7 +36,8 @@ type thunderstoreDriver struct {
 func (d *thunderstoreDriver) Name() string { return driver.ProviderThunderstore }
 
 func (d *thunderstoreDriver) Capabilities(src driver.Source) driver.Capabilities {
-	return driver.Capabilities{Catalog: src.Format != driver.FormatServerPackage}
+	isCatalog := src.Format != driver.FormatServerPackage
+	return driver.Capabilities{Catalog: isCatalog, LiveDetailOverlay: isCatalog}
 }
 
 func (d *thunderstoreDriver) ParseTokens(raw string) []string {
