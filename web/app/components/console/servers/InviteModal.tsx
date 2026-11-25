@@ -20,6 +20,17 @@ const INVITE_ROLES: ReadonlyArray<{ value: InviteRole; label: string; desc: stri
 const USERNAME_RE = /^[a-z0-9]([a-z0-9._-]{0,61}[a-z0-9])?$/;
 const BODY_HEIGHT = "min-h-[220px] pb-5";
 
+function splitHostPort(endpoint: string | null): { host: string; port: string } | null {
+  if (!endpoint) return null;
+  const trimmed = endpoint.trim();
+  const idx = trimmed.lastIndexOf(":");
+  if (idx <= 0 || idx === trimmed.length - 1) return null;
+  const host = trimmed.slice(0, idx);
+  const port = trimmed.slice(idx + 1);
+  if (!/^\d+$/.test(port)) return null;
+  return { host, port };
+}
+
 function joinStepsForGame(gameId: string, endpoint: string | null): string[] {
   switch (gameId) {
     case "minecraft-paper":
@@ -32,8 +43,17 @@ function joinStepsForGame(gameId: string, endpoint: string | null): string[] {
       return ["打开幻兽帕鲁，选择「加入多人游戏」", "在底部输入框粘贴上方地址", "点击「连接」即可进入"];
     case "project-zomboid":
       return ["打开僵尸毁灭工程，选择「加入」", "点击「添加服务器」，填入 IP 与端口", "保存后选中服务器并加入"];
-    case "terraria-vanilla":
-      return ["打开泰拉瑞亚，选择「多人模式」", "点击「通过 IP 加入」，选择角色", "依次填入上方地址的 IP 与端口"];
+    case "terraria-vanilla": {
+      const hp = splitHostPort(endpoint);
+      const addrStep = hp
+        ? `填入公网地址 ${hp.host} 与对外 TCP 端口 ${hp.port}（若有设密码再填密码）`
+        : "依次填入上方地址的公网 IP/域名与实际对外映射的 TCP 端口（非固定 7777），有密码再填密码";
+      return [
+        "打开泰拉瑞亚，进入「多人游戏」→「通过 IP 加入 / 添加服务器 (Add Server)」",
+        addrStep,
+        "跨平台提示：Xbox / PlayStation 需平台联机订阅（Xbox 需开启 Crossplay）；Switch 不支持私人专用服，国服手游联机机制不互通",
+      ];
+    }
     case "terraria-tmodloader":
       return ["在 Steam 启动 tModLoader，进入「多人模式」", "点击「通过 IP 加入」（将自动同步服务端模组）", "依次填入上方地址的 IP 与端口"];
     case "dont-starve-together": {

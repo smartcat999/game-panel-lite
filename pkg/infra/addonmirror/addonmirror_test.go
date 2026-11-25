@@ -207,7 +207,7 @@ func TestListServerVersionsPaperAndVanilla(t *testing.T) {
 func TestListServerVersionsHTTPTerrariaTModLoaderAndSteam(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/get/dedicated-servers-names", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`["terraria-server-1449.zip","terraria-server-mobile-1449.zip","terraria-server-1458.zip"]`))
+		_, _ = w.Write([]byte(`["terraria-server-1449.zip","terraria-server-mobile-1449.zip","terraria-server-1458.zip","terraria-server-1461.zip"]`))
 	})
 	mux.HandleFunc("/repos/tModLoader/tModLoader/releases", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`[{"tag_name":"v2026.09.3.1","draft":false,"prerelease":false},{"tag_name":"v2026.08.3.0","draft":false,"prerelease":false},{"tag_name":"v2026.10.0.0-alpha","draft":false,"prerelease":true}]`))
@@ -217,7 +217,7 @@ func TestListServerVersionsHTTPTerrariaTModLoaderAndSteam(t *testing.T) {
 
 	svc := New(nil)
 	terraria, err := svc.ListServerVersions(context.Background(), ProviderHTTP, srv.URL, "terraria-vanilla")
-	if err != nil || len(terraria) != 2 || terraria[0] != "1.4.5.8" || terraria[1] != "1.4.4.9" {
+	if err != nil || len(terraria) != 3 || terraria[0] != "1.4.6.1" || terraria[1] != "1.4.5.8" || terraria[2] != "1.4.4.9" {
 		t.Fatalf("unexpected terraria versions: %#v, err=%v", terraria, err)
 	}
 	tml, err := svc.ListServerVersions(context.Background(), ProviderHTTP, srv.URL, "terraria-tmodloader")

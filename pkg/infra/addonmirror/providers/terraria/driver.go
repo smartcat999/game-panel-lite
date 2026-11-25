@@ -97,7 +97,7 @@ func (d *terrariaDriver) resolveRelease(ctx context.Context, rt driver.Runtime, 
 			}
 		}
 		if fname == "" {
-			fname = "terraria-server-1458.zip"
+			fname = "terraria-server-1461.zip"
 		}
 		v = parseZipVersion(fname)
 	} else {
@@ -139,7 +139,7 @@ func parseZipVersion(fname string) string {
 	}
 	for _, r := range s {
 		if r < '0' || r > '9' {
-			return "1.4.5.8"
+			return "1.4.6.1"
 		}
 	}
 	if len(s) == 4 {
@@ -148,5 +148,5 @@ func parseZipVersion(fname string) string {
 	if len(s) == 5 {
 		return fmt.Sprintf("%c.%c.%c.%s", s[0], s[1], s[2], s[3:])
 	}
-	return "1.4.5.8"
+	return "1.4.6.1"
 }

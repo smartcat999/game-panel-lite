@@ -297,7 +297,7 @@ ports:
   targetPort: 7777
 published: true
 recommendedPlan: lite
-recommendedVersion: 1.4.5.8
+recommendedVersion: 1.4.6.1
 resources:
   cpu: '1'
   memory: 2Gi
@@ -305,6 +305,7 @@ resources:
 summary: Re-Logic 官方原版联机服务端，支持一键切换经典/专家/大师/旅途难度、小/中/大世界尺寸、腐化/猩红群系与官方彩蛋种子。
 tagline: 像素沙盒冒险 · Re-Logic 官方原版服
 versions:
+- 1.4.6.1
 - 1.4.5.8
 - 1.4.4.9
 consoleDelivery: tml-send-to-console
