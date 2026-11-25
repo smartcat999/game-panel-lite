@@ -203,7 +203,7 @@ func completeSchedule(ctx context.Context, instDB *instancedb.DB, uid, tenant, n
 		}
 		now := time.Now().UTC()
 		status.LastResult, status.LastOutput, status.Stage, status.FinishedAt = result, output, stage, &now
-		if result == corev1.ScheduleResultSucceeded {
+		if result == corev1.ScheduleResultSucceeded || result == corev1.ScheduleResultWarning {
 			status.Progress = 100
 		}
 		updated, err := instDB.UpdateScheduleStatuses(ctx, inst.Metadata.Tenant, inst.Metadata.Name, inst.Metadata.UID, inst.Metadata.StatusVersion, inst.Status.ScheduleStatuses)
@@ -303,9 +303,9 @@ func runSingleDueSchedule(ctx context.Context, reg *repo.Registry, bus mq.Interf
 	instancemodel.AppendInstanceTaskLog(ctx, tl, claimed.Metadata.UID, taskID, fmt.Sprintf("开始执行定时任务「%s」", sched.Name))
 
 	runCtx, cancel := context.WithTimeout(ctx, scheduleActionTimeout(sched.Action))
-	output, runErr := executeSchedule(runCtx, reg, instDB, bus, tl, op, claimed, sched, runID, taskID)
+	result, output, runErr := executeSchedule(runCtx, reg, instDB, bus, tl, op, claimed, sched, runID, taskID)
 	cancel()
-	result, stage := corev1.ScheduleResultSucceeded, corev1.ScheduleStageCompleted
+	stage := corev1.ScheduleStageCompleted
 	if runErr != nil {
 		result, stage = corev1.ScheduleResultFailed, corev1.ScheduleStageFailed
 		if errors.Is(runErr, context.DeadlineExceeded) {
@@ -314,6 +314,9 @@ func runSingleDueSchedule(ctx context.Context, reg *repo.Registry, bus mq.Interf
 		output = instancemodel.HumanizeTaskError(runErr)
 		instancemodel.AppendInstanceTaskLog(ctx, tl, claimed.Metadata.UID, taskID, "任务执行失败: "+output)
 	} else {
+		if result == "" {
+			result = corev1.ScheduleResultSucceeded
+		}
 		instancemodel.AppendInstanceTaskLog(ctx, tl, claimed.Metadata.UID, taskID, "任务执行完成: "+output)
 	}
 	finishCtx, finishCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
@@ -329,25 +332,26 @@ func runSingleDueSchedule(ctx context.Context, reg *repo.Registry, bus mq.Interf
 	return runErr
 }
 
-func executeSchedule(ctx context.Context, reg *repo.Registry, instDB *instancedb.DB, bus mq.Interface, tl tasklog.Interface, op instancemodel.Operator, inst *corev1.Instance, sched corev1.InstanceSchedule, runID, taskID string) (string, error) {
+func executeSchedule(ctx context.Context, reg *repo.Registry, instDB *instancedb.DB, bus mq.Interface, tl tasklog.Interface, op instancemodel.Operator, inst *corev1.Instance, sched corev1.InstanceSchedule, runID, taskID string) (string, string, error) {
 	action := strings.ToLower(strings.TrimSpace(sched.Action))
 	if action != corev1.ScheduleActionCommand && action != corev1.ScheduleActionBackup && action != corev1.ScheduleActionRestart {
-		return "", fmt.Errorf("unsupported scheduled action %q", sched.Action)
+		return "", "", fmt.Errorf("unsupported scheduled action %q", sched.Action)
 	}
 	output, err := executeScheduleCommands(ctx, reg, instDB, bus, tl, op, inst, sched, runID, taskID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	switch action {
 	case corev1.ScheduleActionBackup:
 		return executeScheduleBackup(ctx, instDB, bus, tl, op, inst, sched, runID, taskID)
 	case corev1.ScheduleActionRestart:
-		return executeScheduleRestart(ctx, instDB, bus, tl, op, inst, sched, runID, taskID)
+		out, rErr := executeScheduleRestart(ctx, instDB, bus, tl, op, inst, sched, runID, taskID)
+		return corev1.ScheduleResultSucceeded, out, rErr
 	default:
 		if output == "" {
 			output = "已执行计划指令"
 		}
-		return output, nil
+		return corev1.ScheduleResultSucceeded, output, nil
 	}
 }
 
@@ -379,11 +383,11 @@ func executeScheduleCommands(ctx context.Context, reg *repo.Registry, instDB *in
 	return output, nil
 }
 
-func executeScheduleBackup(ctx context.Context, instDB *instancedb.DB, bus mq.Interface, tl tasklog.Interface, op instancemodel.Operator, inst *corev1.Instance, sched corev1.InstanceSchedule, runID, taskID string) (string, error) {
+func executeScheduleBackup(ctx context.Context, instDB *instancedb.DB, bus mq.Interface, tl tasklog.Interface, op instancemodel.Operator, inst *corev1.Instance, sched corev1.InstanceSchedule, runID, taskID string) (string, string, error) {
 	updateScheduleProgress(ctx, instDB, bus, inst.Metadata.UID, inst.Metadata.Tenant, inst.Metadata.Name, sched.ID, runID, corev1.ScheduleStageArchivingBackup, 55, "正在归档并上传备份...")
 	if config.Get() == nil || !config.Get().S3.IsConfigured() {
 		instancemodel.AppendInstanceTaskLog(ctx, tl, inst.Metadata.UID, taskID, "已执行存档保存指令")
-		return "已执行存档保存指令", nil
+		return corev1.ScheduleResultSucceeded, "已执行存档保存指令", nil
 	}
 	runAt := time.Now().UTC()
 	if st := scheduleStatus(inst, sched.ID); st != nil && st.LastRunAt != nil {
@@ -395,32 +399,45 @@ func executeScheduleBackup(ctx context.Context, instDB *instancedb.DB, bus mq.In
 		Metadata: metav1.ObjectMeta{UID: inst.Metadata.UID}, Action: corev1.FileActionBackup,
 		OperationID: opID, Path: buildAutoBackupArchivePath(inst.Metadata.Name, runAt),
 	}); err != nil {
-		return "", err
+		return "", "", err
 	}
 	latest, err := instDB.Get(ctx, inst.Metadata.Tenant, inst.Metadata.Name)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := op.ReconcileBackups(ctx, latest); err != nil {
-		return "", err
+		return "", "", err
 	}
 	after, err := instDB.Get(ctx, inst.Metadata.Tenant, inst.Metadata.Name)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	for _, b := range after.Status.Backups {
 		if b.OperationID == opID {
-			if b.Phase != corev1.BackupPhaseCompleted {
-				if b.Message != "" {
-					return "", errors.New(b.Message)
-				}
-				return "", fmt.Errorf("定时备份未完成（当前阶段: %s）", b.Phase)
-			}
-			instancemodel.AppendInstanceTaskLog(ctx, tl, inst.Metadata.UID, taskID, fmt.Sprintf("归档备份已完成（%d 字节）", b.SizeBytes))
-			return "已完成定时归档备份", nil
+			return scheduleBackupOutcome(ctx, tl, inst.Metadata.UID, taskID, b)
 		}
 	}
-	return "已完成定时归档备份", nil
+	return corev1.ScheduleResultSucceeded, "已完成定时归档备份", nil
+}
+
+func scheduleBackupOutcome(ctx context.Context, tl tasklog.Interface, uid, taskID string, b corev1.InstanceBackupRecord) (string, string, error) {
+	if b.Phase != corev1.BackupPhaseCompleted {
+		if b.Message != "" {
+			return "", "", errors.New(b.Message)
+		}
+		return "", "", fmt.Errorf("定时备份未完成（当前阶段: %s）", b.Phase)
+	}
+	if b.SaveConfirmation != nil && b.SaveConfirmation.Status == corev1.BackupSaveConfirmationUnconfirmed {
+		warn := strings.TrimSpace(b.SaveConfirmation.Warning)
+		msg := "已归档，存档未确认"
+		if warn != "" {
+			msg += "：" + warn
+		}
+		instancemodel.AppendInstanceTaskLog(ctx, tl, uid, taskID, fmt.Sprintf("归档备份已完成（%d 字节），警告：%s", b.SizeBytes, msg))
+		return corev1.ScheduleResultWarning, msg, nil
+	}
+	instancemodel.AppendInstanceTaskLog(ctx, tl, uid, taskID, fmt.Sprintf("归档备份已完成（%d 字节）", b.SizeBytes))
+	return corev1.ScheduleResultSucceeded, "已完成定时归档备份", nil
 }
 
 func executeScheduleRestart(ctx context.Context, instDB *instancedb.DB, bus mq.Interface, tl tasklog.Interface, op instancemodel.Operator, inst *corev1.Instance, sched corev1.InstanceSchedule, runID, taskID string) (string, error) {

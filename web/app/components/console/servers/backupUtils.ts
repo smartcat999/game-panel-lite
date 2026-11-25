@@ -1,4 +1,8 @@
-import type { InstanceBackupRecord, InstanceItem } from "../../../console/lib/types";
+import type {
+  InstanceBackupRecord,
+  InstanceBackupSaveConfirmation,
+  InstanceItem,
+} from "../../../console/lib/types";
 import type { BackupConfigPreviewItem, BackupInspectResult } from "./api";
 
 export function encodeLabelHex(label: string): string {
@@ -174,6 +178,35 @@ export function formatAddonScopeLabel(scope: string): string {
   if (scope === "Master") return "地上";
   if (scope === "Caves") return "洞穴";
   return scope;
+}
+
+export function formatBackupShardList(shards?: string[]): string {
+  if (!shards || shards.length === 0) return "";
+  return shards.map((s) => (s === "master" ? "地上" : s === "caves" ? "洞穴" : s)).join(" + ");
+}
+
+export function formatBackupSaveConfirmationSummary(
+  conf?: InstanceBackupSaveConfirmation,
+  options?: { isLegacyDST?: boolean },
+): { status: "Confirmed" | "Unconfirmed" | "Unrecorded" | null; label: string; warning?: string } {
+  if (conf?.status === "Unconfirmed") {
+    return {
+      status: "Unconfirmed",
+      label: "已归档，存档未确认",
+      warning: conf.warning || "未收到完整存档落盘回执",
+    };
+  }
+  if (conf?.status === "Confirmed") {
+    const shards = formatBackupShardList(conf.confirmedShards || conf.expectedShards);
+    return {
+      status: "Confirmed",
+      label: shards ? `存档已确认（${shards}）` : "存档已确认",
+    };
+  }
+  if (options?.isLegacyDST) {
+    return { status: "Unrecorded", label: "存档确认：未记录" };
+  }
+  return { status: null, label: "" };
 }
 
 export function buildBackupRowMeta(record: InstanceBackupRecord, addonNoun = "模组"): string {

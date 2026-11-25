@@ -41,6 +41,7 @@ import {
   buildArchivePath,
   buildBackupRowMeta,
   formatBackupDisplayName,
+  formatBackupSaveConfirmationSummary,
   formatBackupStageLabel,
   isTerminalBackupPhase,
   splitSubtreeDirs,
@@ -151,12 +152,19 @@ export function BackupTab({
       const displayName = formatBackupDisplayName(b.path, name);
       if (oldPhase && oldPhase !== "Restoring" && !isTerminalBackupPhase(oldPhase) && phase === "Completed") {
         const sizeText = b.sizeBytes ? `（${formatBytes(b.sizeBytes)}）` : "";
-        toast(
-          "success",
-          b.imported
-            ? `导入备份「${displayName}」解析完成，可随时恢复`
-            : `备份「${displayName}」创建成功${sizeText}`,
-        );
+        if (b.saveConfirmation?.status === "Unconfirmed") {
+          toast(
+            "info",
+            `备份「${displayName}」已归档${sizeText}，但存档落盘未确认：${b.saveConfirmation.warning || "请留意存档一致性"}`,
+          );
+        } else {
+          toast(
+            "success",
+            b.imported
+              ? `导入备份「${displayName}」解析完成，可随时恢复`
+              : `备份「${displayName}」创建成功${sizeText}`,
+          );
+        }
       } else if (
         oldPhase &&
         oldPhase !== "Failed" &&
@@ -453,14 +461,18 @@ export function BackupTab({
               );
               const isActive = isRestoring || isDeleting || isBackingUp || isInspecting;
               const isReady = (!b.phase || b.phase === "Completed") && !isRestoring;
+              const isSaveUnconfirmed = isReady && b.saveConfirmation?.status === "Unconfirmed";
+              const saveConfirmSummary = isReady ? formatBackupSaveConfirmationSummary(b.saveConfirmation) : null;
 
               const badgeTone = isDeleting
                 ? "warning"
                 : isFailed || isInspectFailed || isRestoreFailed
                   ? "danger"
-                  : isActive
-                    ? "accent"
-                    : null;
+                  : isSaveUnconfirmed
+                    ? "warning"
+                    : isActive
+                      ? "accent"
+                      : null;
               const badgeLabel = isDeleting
                 ? "删除中"
                 : isRestoring
@@ -477,7 +489,9 @@ export function BackupTab({
                           ? "备份失败"
                           : isRestoreFailed
                             ? "恢复失败"
-                            : null;
+                            : isSaveUnconfirmed
+                              ? saveConfirmSummary?.label || "已归档，存档未确认"
+                              : null;
 
               const activeProgress = b.progress;
               const activeStage =
@@ -593,16 +607,25 @@ export function BackupTab({
                       </div>
                     ) : failureText ? (
                       <p className="mt-0.5 truncate text-xs text-[#B42318]">{failureText}</p>
-                    ) : rowMeta || mobileFallbackMeta ? (
-                      <p className="mt-0.5 truncate text-xs text-[#8A90A6] tabular-nums">
-                        {rowMeta}
-                        {mobileFallbackMeta && (
-                          <span className="sm:hidden">
-                            {rowMeta ? ` · ${mobileFallbackMeta}` : mobileFallbackMeta}
-                          </span>
+                    ) : (
+                      <>
+                        {isSaveUnconfirmed && saveConfirmSummary?.warning && (
+                          <p className="mt-0.5 truncate text-xs text-[#B54708]" title={saveConfirmSummary.warning}>
+                            {saveConfirmSummary.warning}
+                          </p>
                         )}
-                      </p>
-                    ) : null}
+                        {(rowMeta || mobileFallbackMeta) && (
+                          <p className="mt-0.5 truncate text-xs text-[#8A90A6] tabular-nums">
+                            {rowMeta}
+                            {mobileFallbackMeta && (
+                              <span className="sm:hidden">
+                                {rowMeta ? ` · ${mobileFallbackMeta}` : mobileFallbackMeta}
+                              </span>
+                            )}
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {!isActive && (

@@ -1,6 +1,7 @@
 package instance
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -54,5 +55,23 @@ func TestScheduleClaimTTLAndTaskID(t *testing.T) {
 	}
 	if got := scheduleTaskID("sched-run-2"); got != "sched-run-2" {
 		t.Fatalf("expected sched-run-2 unchanged, got %q", got)
+	}
+}
+
+func TestScheduleBackupOutcomeSaveConfirmation(t *testing.T) {
+	ctx := context.Background()
+	resOK, outOK, err := scheduleBackupOutcome(ctx, nil, "u1", "t1", corev1.InstanceBackupRecord{
+		Phase: corev1.BackupPhaseCompleted, SizeBytes: 128,
+		SaveConfirmation: &corev1.InstanceBackupSaveConfirmation{Status: corev1.BackupSaveConfirmationConfirmed},
+	})
+	if err != nil || resOK != corev1.ScheduleResultSucceeded || outOK != "已完成定时归档备份" {
+		t.Fatalf("confirmed outcome = (%q, %q, %v)", resOK, outOK, err)
+	}
+	resWarn, outWarn, err := scheduleBackupOutcome(ctx, nil, "u1", "t1", corev1.InstanceBackupRecord{
+		Phase: corev1.BackupPhaseCompleted, SizeBytes: 128,
+		SaveConfirmation: &corev1.InstanceBackupSaveConfirmation{Status: corev1.BackupSaveConfirmationUnconfirmed, Warning: "洞穴分片等待落盘确认超时"},
+	})
+	if err != nil || resWarn != corev1.ScheduleResultWarning || outWarn != "已归档，存档未确认：洞穴分片等待落盘确认超时" {
+		t.Fatalf("warning outcome = (%q, %q, %v)", resWarn, outWarn, err)
 	}
 }

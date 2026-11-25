@@ -14,6 +14,8 @@ import {
   formatBackupAddonVersion,
   formatBackupDateTime,
   formatBackupDisplayName,
+  formatBackupSaveConfirmationSummary,
+  formatBackupShardList,
   formatConfigSideValue,
   getLatestBackupInspect,
   setCachedBackupInspect,
@@ -352,6 +354,17 @@ export function BackupDetailModal({
     inst.spec.serverArtifact?.version ||
     inst.metadata.annotations?.["core.gamepanel.io/app-version"];
   const versionChanged = Boolean(serverVer && currentVer && serverVer !== currentVer);
+  const isLegacyDST = Boolean(
+    backup &&
+      !backup.imported &&
+      !backup.saveConfirmation &&
+      (inst.metadata.labels?.["gamepanel.io/app"] === "dont-starve-together" ||
+        app?.metadata.name === "dont-starve-together" ||
+        backup.snapshot?.appName === "dont-starve-together"),
+  );
+  const saveConfirmSummary = backup
+    ? formatBackupSaveConfirmationSummary(backup.saveConfirmation, { isLegacyDST })
+    : { status: null, label: "" };
 
   const titleNode = backup ? (
     <span className="flex min-w-0 items-center gap-2.5">
@@ -376,6 +389,19 @@ export function BackupDetailModal({
         <span>
           · 服务端 <Mono className="text-[#3D4258]">{serverVer || currentVer}</Mono>
           {versionChanged && <span className="ml-1 text-[#B54708]">（当前 {currentVer}）</span>}
+        </span>
+      )}
+      {saveConfirmSummary.label && (
+        <span
+          className={
+            saveConfirmSummary.status === "Unconfirmed"
+              ? "font-medium text-[#B54708]"
+              : saveConfirmSummary.status === "Confirmed"
+                ? "text-[#067647]"
+                : "text-[#8A90A6]"
+          }
+        >
+          · {saveConfirmSummary.label}
         </span>
       )}
     </span>
@@ -503,6 +529,26 @@ export function BackupDetailModal({
     >
       {backup && (
         <div>
+          {saveConfirmSummary.status === "Unconfirmed" && (
+            <div className="mb-4 rounded-xl bg-[#FFFAEB] px-4 py-3 text-xs text-[#B54708]">
+              <div className="font-medium">{saveConfirmSummary.label}：{saveConfirmSummary.warning}</div>
+              {(backup.saveConfirmation?.confirmedShards?.length ||
+                backup.saveConfirmation?.unconfirmedShards?.length) && (
+                <div className="mt-1 text-[11px] text-[#B54708]/90">
+                  {backup.saveConfirmation?.confirmedShards?.length
+                    ? `已确认：${formatBackupShardList(backup.saveConfirmation.confirmedShards)}`
+                    : ""}
+                  {backup.saveConfirmation?.confirmedShards?.length &&
+                  backup.saveConfirmation?.unconfirmedShards?.length
+                    ? " · "
+                    : ""}
+                  {backup.saveConfirmation?.unconfirmedShards?.length
+                    ? `未确认：${formatBackupShardList(backup.saveConfirmation.unconfirmedShards)}`
+                    : ""}
+                </div>
+              )}
+            </div>
+          )}
           {activeTab === "config" &&
             (inspectError && configPreview.length === 0 ? (
               <div className="flex items-center justify-between gap-3 rounded-xl bg-[#FEF3F2] px-4 py-3 text-xs text-[#B42318]">

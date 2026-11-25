@@ -360,7 +360,7 @@ export function ScheduleTab({ inst, running }: { inst: InstanceItem; running?: b
                       ? "accent"
                       : st?.lastResult === "Failed"
                         ? "danger"
-                        : st?.lastResult === "Unknown"
+                        : st?.lastResult === "Unknown" || st?.lastResult === "Warning"
                           ? "warning"
                           : st?.lastResult === "Succeeded"
                             ? "success"
@@ -372,11 +372,13 @@ export function ScheduleTab({ inst, running }: { inst: InstanceItem; running?: b
                         ? "执行失败"
                         : st?.lastResult === "Unknown"
                           ? "结果未知"
-                          : st?.lastResult === "Succeeded"
-                            ? "上次成功"
-                            : sched.enabled
-                              ? "等待执行"
-                              : "已停用";
+                          : st?.lastResult === "Warning"
+                            ? "已归档，存档未确认"
+                            : st?.lastResult === "Succeeded"
+                              ? "上次成功"
+                              : sched.enabled
+                                ? "等待执行"
+                                : "已停用";
                   const pct = typeof st?.progress === "number" && st.progress > 0 ? Math.min(100, st.progress) : null;
                   const overflowItems: MenuItem[] = [
                     {
@@ -454,8 +456,13 @@ export function ScheduleTab({ inst, running }: { inst: InstanceItem; running?: b
                               )}
                             </div>
                           )}
-                          {!isRunningTask && st?.lastOutput && st?.lastResult === "Failed" && (
-                            <div className="max-w-[220px] truncate text-xs text-[#B42318]" title={st.lastOutput}>
+                          {!isRunningTask && st?.lastOutput && (st?.lastResult === "Failed" || st?.lastResult === "Warning") && (
+                            <div
+                              className={`max-w-[220px] truncate text-xs ${
+                                st.lastResult === "Warning" ? "text-[#B54708]" : "text-[#B42318]"
+                              }`}
+                              title={st.lastOutput}
+                            >
                               {st.lastOutput}
                             </div>
                           )}

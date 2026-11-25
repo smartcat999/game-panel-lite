@@ -404,6 +404,9 @@ const (
 	RestoreResultSucceeded = "Succeeded"
 	RestoreResultFailed    = "Failed"
 
+	BackupSaveConfirmationConfirmed   = "Confirmed"
+	BackupSaveConfirmationUnconfirmed = "Unconfirmed"
+
 	BackupInspectPhasePending   = "Pending"
 	BackupInspectPhaseCompleted = "Completed"
 	BackupInspectPhaseFailed    = "Failed"
@@ -436,6 +439,7 @@ const (
 	ScheduleResultRunning   = "Running"
 	ScheduleResultUnknown   = "Unknown"
 	ScheduleResultSucceeded = "Succeeded"
+	ScheduleResultWarning   = "Warning"
 	ScheduleResultFailed    = "Failed"
 
 	ScheduleStageQueued             = "Queued"
@@ -804,33 +808,44 @@ type InstanceUsage struct {
 }
 
 type InstanceBackupRecord struct {
-	UID                string                    `json:"uid,omitempty"`
-	OperationID        string                    `json:"operationID,omitempty"`
-	AllocationID       string                    `json:"allocationID,omitempty"`
-	TaskID             string                    `json:"taskID,omitempty"`
-	Imported           bool                      `json:"imported,omitempty"`
-	Phase              string                    `json:"phase,omitempty"`
-	Stage              string                    `json:"stage,omitempty"`
-	Progress           int32                     `json:"progress,omitempty"`
-	ProcessedBytes     int64                     `json:"processedBytes,omitempty"`
-	TotalBytes         int64                     `json:"totalBytes,omitempty"`
-	SpeedBytesPerSec   int64                     `json:"speedBytesPerSec,omitempty"`
-	StartedAt          *time.Time                `json:"startedAt,omitempty"`
-	Message            string                    `json:"message,omitempty"`
-	ReservedBytes      int64                     `json:"reservedBytes,omitempty"`
-	Path               string                    `json:"path"`
-	SizeBytes          int64                     `json:"sizeBytes,omitempty"`
-	SHA256             string                    `json:"sha256,omitempty"`
-	CompletedAt        *time.Time                `json:"completedAt,omitempty"`
-	LastRestoreTaskID  string                    `json:"lastRestoreTaskID,omitempty"`
-	LastRestoreResult  string                    `json:"lastRestoreResult,omitempty"`
-	LastRestoreMessage string                    `json:"lastRestoreMessage,omitempty"`
-	LastRestoreAt      *time.Time                `json:"lastRestoreAt,omitempty"`
-	RestoreSourcePath  string                    `json:"restoreSourcePath,omitempty"`
-	RestoreTargetPath  string                    `json:"restoreTargetPath,omitempty"`
-	RestoreReplace     *bool                     `json:"restoreReplace,omitempty"`
-	Snapshot           *InstanceBackupSnapshot   `json:"snapshot,omitempty"`
-	Inspection         *InstanceBackupInspection `json:"inspection,omitempty"`
+	UID                string                          `json:"uid,omitempty"`
+	OperationID        string                          `json:"operationID,omitempty"`
+	AllocationID       string                          `json:"allocationID,omitempty"`
+	TaskID             string                          `json:"taskID,omitempty"`
+	Imported           bool                            `json:"imported,omitempty"`
+	Phase              string                          `json:"phase,omitempty"`
+	Stage              string                          `json:"stage,omitempty"`
+	Progress           int32                           `json:"progress,omitempty"`
+	ProcessedBytes     int64                           `json:"processedBytes,omitempty"`
+	TotalBytes         int64                           `json:"totalBytes,omitempty"`
+	SpeedBytesPerSec   int64                           `json:"speedBytesPerSec,omitempty"`
+	StartedAt          *time.Time                      `json:"startedAt,omitempty"`
+	Message            string                          `json:"message,omitempty"`
+	ReservedBytes      int64                           `json:"reservedBytes,omitempty"`
+	Path               string                          `json:"path"`
+	SizeBytes          int64                           `json:"sizeBytes,omitempty"`
+	SHA256             string                          `json:"sha256,omitempty"`
+	CompletedAt        *time.Time                      `json:"completedAt,omitempty"`
+	LastRestoreTaskID  string                          `json:"lastRestoreTaskID,omitempty"`
+	LastRestoreResult  string                          `json:"lastRestoreResult,omitempty"`
+	LastRestoreMessage string                          `json:"lastRestoreMessage,omitempty"`
+	LastRestoreAt      *time.Time                      `json:"lastRestoreAt,omitempty"`
+	RestoreSourcePath  string                          `json:"restoreSourcePath,omitempty"`
+	RestoreTargetPath  string                          `json:"restoreTargetPath,omitempty"`
+	RestoreReplace     *bool                           `json:"restoreReplace,omitempty"`
+	SaveConfirmation   *InstanceBackupSaveConfirmation `json:"saveConfirmation,omitempty"`
+	Snapshot           *InstanceBackupSnapshot         `json:"snapshot,omitempty"`
+	Inspection         *InstanceBackupInspection       `json:"inspection,omitempty"`
+}
+
+// InstanceBackupSaveConfirmation records whether live server shards confirmed flushing world
+// state to disk before a backup archive was captured.
+type InstanceBackupSaveConfirmation struct {
+	Status            string   `json:"status,omitempty"`
+	ExpectedShards    []string `json:"expectedShards,omitempty"`
+	ConfirmedShards   []string `json:"confirmedShards,omitempty"`
+	UnconfirmedShards []string `json:"unconfirmedShards,omitempty"`
+	Warning           string   `json:"warning,omitempty"`
 }
 
 // InstanceBackupAddon records a single mod/plugin entry either snapshotted from the instance
@@ -1047,36 +1062,37 @@ type InstanceExec struct {
 // routing bulk payloads through the control-plane API server.
 type InstanceFiles struct {
 	metav1.TypeMeta      `json:",inline"`
-	Metadata             metav1.ObjectMeta          `json:"metadata"`
-	OperationID          string                     `json:"operationID,omitempty"`
-	Action               string                     `json:"action,omitempty"`
-	Path                 string                     `json:"path,omitempty"`
-	SourcePath           string                     `json:"sourcePath,omitempty"`
-	TargetPath           string                     `json:"targetPath,omitempty"`
-	ReplaceTarget        *bool                      `json:"replaceTarget,omitempty"`
-	ArchiveFormat        string                     `json:"archiveFormat,omitempty"`
-	RecommendedSource    string                     `json:"recommendedSource,omitempty"`
-	CandidateSources     []string                   `json:"candidateSources,omitempty"`
-	ArchiveDirectories   []string                   `json:"archiveDirectories,omitempty"`
-	SourceEntries        []string                   `json:"sourceEntries,omitempty"`
-	ManagedFiles         []string                   `json:"managedFiles,omitempty"`
-	FileCount            int                        `json:"fileCount,omitempty"`
-	UncompressedBytes    int64                      `json:"uncompressedBytes,omitempty"`
-	ServerVersion        string                     `json:"serverVersion,omitempty"`
-	CurrentServerVersion string                     `json:"currentServerVersion,omitempty"`
-	ConfigPreview        []InstanceBackupConfigItem `json:"configPreview,omitempty"`
-	AddonPreview         []InstanceBackupAddonItem  `json:"addonPreview,omitempty"`
-	PresignedURL         string                     `json:"presignedURL,omitempty"`
-	MaxBytes             int64                      `json:"maxBytes,omitempty"`
-	RateLimitBytesPerSec int64                      `json:"rateLimitBytesPerSec,omitempty"`
-	Phase                string                     `json:"phase,omitempty"`
-	Ticket               string                     `json:"ticket,omitempty"`
-	DirectURL            string                     `json:"directURL,omitempty"`
-	ExpiresAt            *time.Time                 `json:"expiresAt,omitempty"`
-	SizeBytes            int64                      `json:"sizeBytes,omitempty"`
-	SHA256               string                     `json:"sha256,omitempty"`
-	CompletedAt          *time.Time                 `json:"completedAt,omitempty"`
-	Entries              []InstanceFileEntry        `json:"entries,omitempty"`
+	Metadata             metav1.ObjectMeta               `json:"metadata"`
+	OperationID          string                          `json:"operationID,omitempty"`
+	Action               string                          `json:"action,omitempty"`
+	Path                 string                          `json:"path,omitempty"`
+	SourcePath           string                          `json:"sourcePath,omitempty"`
+	TargetPath           string                          `json:"targetPath,omitempty"`
+	ReplaceTarget        *bool                           `json:"replaceTarget,omitempty"`
+	ArchiveFormat        string                          `json:"archiveFormat,omitempty"`
+	RecommendedSource    string                          `json:"recommendedSource,omitempty"`
+	CandidateSources     []string                        `json:"candidateSources,omitempty"`
+	ArchiveDirectories   []string                        `json:"archiveDirectories,omitempty"`
+	SourceEntries        []string                        `json:"sourceEntries,omitempty"`
+	ManagedFiles         []string                        `json:"managedFiles,omitempty"`
+	FileCount            int                             `json:"fileCount,omitempty"`
+	UncompressedBytes    int64                           `json:"uncompressedBytes,omitempty"`
+	ServerVersion        string                          `json:"serverVersion,omitempty"`
+	CurrentServerVersion string                          `json:"currentServerVersion,omitempty"`
+	ConfigPreview        []InstanceBackupConfigItem      `json:"configPreview,omitempty"`
+	AddonPreview         []InstanceBackupAddonItem       `json:"addonPreview,omitempty"`
+	PresignedURL         string                          `json:"presignedURL,omitempty"`
+	MaxBytes             int64                           `json:"maxBytes,omitempty"`
+	RateLimitBytesPerSec int64                           `json:"rateLimitBytesPerSec,omitempty"`
+	Phase                string                          `json:"phase,omitempty"`
+	Ticket               string                          `json:"ticket,omitempty"`
+	DirectURL            string                          `json:"directURL,omitempty"`
+	ExpiresAt            *time.Time                      `json:"expiresAt,omitempty"`
+	SizeBytes            int64                           `json:"sizeBytes,omitempty"`
+	SHA256               string                          `json:"sha256,omitempty"`
+	CompletedAt          *time.Time                      `json:"completedAt,omitempty"`
+	SaveConfirmation     *InstanceBackupSaveConfirmation `json:"saveConfirmation,omitempty"`
+	Entries              []InstanceFileEntry             `json:"entries,omitempty"`
 }
 
 // InstanceBackupConfigItem describes a single declarative config parameter extracted from

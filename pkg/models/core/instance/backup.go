@@ -902,7 +902,7 @@ func backupProjection(r backupdb.Record) corev1.InstanceBackupRecord {
 		Phase: string(r.Phase), ReservedBytes: r.Command.MaxBytes, Path: r.Command.ObjectKey,
 	}
 	if r.Result != nil {
-		b.SizeBytes, b.SHA256 = r.Result.SizeBytes, r.Result.SHA256
+		b.SizeBytes, b.SHA256, b.SaveConfirmation = r.Result.SizeBytes, r.Result.SHA256, r.Result.SaveConfirmation
 		if r.Phase == backupdb.Completed {
 			b.ReservedBytes = r.Result.SizeBytes
 		}
@@ -1019,7 +1019,7 @@ func backupResponse(inst *corev1.Instance, r backupdb.Record) *corev1.InstanceFi
 		MaxBytes: r.Command.MaxBytes, RateLimitBytesPerSec: r.Command.RateLimit, Phase: string(r.Phase),
 	}
 	if r.Result != nil {
-		out.SizeBytes, out.SHA256 = r.Result.SizeBytes, r.Result.SHA256
+		out.SizeBytes, out.SHA256, out.SaveConfirmation = r.Result.SizeBytes, r.Result.SHA256, r.Result.SaveConfirmation
 		t := r.Result.CompletedAt
 		out.CompletedAt = &t
 	}

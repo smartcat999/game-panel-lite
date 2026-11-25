@@ -230,7 +230,7 @@ func TestArchiveInstanceBackupQuiescesWhenRequired(t *testing.T) {
 
 	tmp1, _ := os.CreateTemp(t.TempDir(), "bak-*.tar.gz")
 	defer func() { _ = tmp1.Close() }()
-	size, sum, err := ag.archiveInstanceBackup(context.Background(), newTaskStreamWriter(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/files", nil)), inst, root, tmp1, 1<<20)
+	size, sum, _, err := ag.archiveInstanceBackup(context.Background(), newTaskStreamWriter(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/files", nil)), inst, root, tmp1, 1<<20)
 	if err != nil || size == 0 || sum == "" || drv.quiesceCount != 1 {
 		t.Fatalf("expected quiesced backup once with non-empty archive, got size=%d quiesceCount=%d err=%v", size, drv.quiesceCount, err)
 	}
@@ -238,7 +238,7 @@ func TestArchiveInstanceBackupQuiescesWhenRequired(t *testing.T) {
 	inst.Spec.BackupPolicy.BackupRequiresStop = false
 	tmp2, _ := os.CreateTemp(t.TempDir(), "bak2-*.tar.gz")
 	defer func() { _ = tmp2.Close() }()
-	if _, _, err := ag.archiveInstanceBackup(context.Background(), newTaskStreamWriter(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/files", nil)), inst, root, tmp2, 1<<20); err != nil || drv.quiesceCount != 1 {
+	if _, _, _, err := ag.archiveInstanceBackup(context.Background(), newTaskStreamWriter(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/files", nil)), inst, root, tmp2, 1<<20); err != nil || drv.quiesceCount != 1 {
 		t.Fatalf("expected non-stop backup to skip quiesce, got quiesceCount=%d err=%v", drv.quiesceCount, err)
 	}
 }

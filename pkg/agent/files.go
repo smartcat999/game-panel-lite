@@ -658,7 +658,7 @@ func (a *Agent) handleStreamingS3Backup(w http.ResponseWriter, r *http.Request, 
 }
 
 func (a *Agent) executeStreamingBackup(ts *taskStreamWriter, r *http.Request, inst *corev1.Instance, root *os.Root, tmp *os.File, maxBytes int64, req *corev1.InstanceFiles) {
-	size, sum, archErr := a.archiveInstanceBackup(r.Context(), ts, inst, root, tmp, maxBytes)
+	size, sum, saveConf, archErr := a.archiveInstanceBackup(r.Context(), ts, inst, root, tmp, maxBytes)
 	if archErr != nil {
 		if errors.Is(archErr, run.ErrFileQuotaExceeded) {
 			ts.fail(http.StatusRequestEntityTooLarge, fmt.Sprintf("backup exceeds allowed MaxBytes quota (%d bytes)", maxBytes))
@@ -677,12 +677,12 @@ func (a *Agent) executeStreamingBackup(ts *taskStreamWriter, r *http.Request, in
 		return
 	}
 	now := time.Now().UTC()
-	req.SizeBytes, req.SHA256, req.CompletedAt = size, sum, &now
+	req.SizeBytes, req.SHA256, req.CompletedAt, req.SaveConfirmation = size, sum, &now, saveConf
 	ts.log(corev1.BackupStageCompleted, "存档已成功上传至对象存储")
 	ts.result(req)
 }
 
-func (a *Agent) archiveInstanceBackup(ctx context.Context, ts *taskStreamWriter, inst *corev1.Instance, root *os.Root, tmp *os.File, maxBytes int64) (int64, string, error) {
+func (a *Agent) archiveInstanceBackup(ctx context.Context, ts *taskStreamWriter, inst *corev1.Instance, root *os.Root, tmp *os.File, maxBytes int64) (int64, string, *corev1.InstanceBackupSaveConfirmation, error) {
 	includePaths := prepareBackupArchivePaths(inst, root)
 	if quiescer, rc := a.resolveBackupQuiescer(inst); quiescer != nil {
 		ts.log(corev1.BackupStageStopping, "该应用需先安全停服以确保存档落盘，准备停止服务器...")
@@ -700,14 +700,15 @@ func (a *Agent) archiveInstanceBackup(ctx context.Context, ts *taskStreamWriter,
 		var postErr *runtime.PostQuiesceError
 		if errors.As(err, &postErr) {
 			ts.log(corev1.BackupStageRestarting, fmt.Sprintf("存档已打包完成，后续实例重拉起将由控制器自动重试: %v", postErr.Err))
-			return size, sum, nil
+			return size, sum, nil, nil
 		}
-		return size, sum, err
+		return size, sum, nil, err
 	}
-	a.flushInstanceBeforeBackup(ctx, ts, inst)
+	saveConf := a.flushInstanceBeforeBackup(ctx, ts, inst)
 	ts.log(corev1.BackupStageArchiving, "正在扫描并打包游戏存档文件...")
 	ts.progress(corev1.BackupStageArchiving, 15, 0, 0, 0, "正在打包存档")
-	return archiveWithThrottledProgress(root, includePaths, tmp, maxBytes, ts)
+	size, sum, err := archiveWithThrottledProgress(root, includePaths, tmp, maxBytes, ts)
+	return size, sum, saveConf, err
 }
 
 func (a *Agent) resolveBackupQuiescer(inst *corev1.Instance) (runtime.MaintenanceQuiescer, *corev1.RuntimeClass) {
@@ -729,28 +730,27 @@ func (a *Agent) resolveBackupQuiescer(inst *corev1.Instance) (runtime.Maintenanc
 	return quiescer, rc
 }
 
-func (a *Agent) flushInstanceBeforeBackup(ctx context.Context, ts *taskStreamWriter, inst *corev1.Instance) {
+func (a *Agent) flushInstanceBeforeBackup(ctx context.Context, ts *taskStreamWriter, inst *corev1.Instance) *corev1.InstanceBackupSaveConfirmation {
 	if a == nil || a.drivers == nil || inst == nil || inst.Spec.BackupPolicy == nil {
-		return
+		return nil
 	}
 	if corev1.EffectiveInstanceState(inst) == corev1.InstanceStateStopped || inst.Status.Phase != corev1.InstancePhaseRunning {
-		return
+		return nil
 	}
 	cmd := strings.TrimSpace(inst.Spec.BackupPolicy.PreBackupCommand)
 	if cmd == "" {
-		return
+		return nil
 	}
 	rc, err := frozenRuntimeClass(inst)
 	if err != nil {
-		return
+		return nil
 	}
 	drv, ok := a.drivers.Get(rc.Handler)
 	if !ok {
-		return
+		return nil
 	}
 	if isDSTSaveFlush(inst, cmd) {
-		a.confirmDSTBackupSave(ctx, ts, drv, inst)
-		return
+		return a.confirmDSTBackupSave(ctx, ts, drv, inst)
 	}
 	if ts != nil {
 		ts.log(corev1.BackupStageArchiving, "正在通知游戏服务端保存最新进度...")
@@ -761,6 +761,7 @@ func (a *Agent) flushInstanceBeforeBackup(ctx context.Context, ts *taskStreamWri
 	if _, err := drv.Exec(flushCtx, inst, runtime.ExecRequest{Command: argv}); err == nil {
 		time.Sleep(500 * time.Millisecond)
 	}
+	return nil
 }
 
 func archiveWithThrottledProgress(root *os.Root, includePaths []string, tmp *os.File, maxBytes int64, ts *taskStreamWriter) (int64, string, error) {

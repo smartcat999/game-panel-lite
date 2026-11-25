@@ -357,7 +357,7 @@ func (o *operator) finalizeCompletedBackup(ctx context.Context, inst *corev1.Ins
 	o.updateBackupProgress(ctx, inst, r.Command.OperationID, taskID, corev1.BackupStageSettling, 99, result.SizeBytes, result.SizeBytes, 0, "正在结算配额")
 	AppendInstanceTaskLog(ctx, o.taskLogs, inst.Metadata.UID, taskID, fmt.Sprintf("备份上传成功（%s），正在结算空间配额...", formatHumanBytes(result.SizeBytes)))
 	completed, err := o.backupDB.Transition(ctx, r.Command.OperationID, r.Version, backupdb.Update{
-		Phase: backupdb.Completed, Result: &backupdb.Result{SizeBytes: result.SizeBytes, SHA256: result.SHA256, CompletedAt: completedAt},
+		Phase: backupdb.Completed, Result: &backupdb.Result{SizeBytes: result.SizeBytes, SHA256: result.SHA256, CompletedAt: completedAt, SaveConfirmation: result.SaveConfirmation},
 	})
 	if err != nil {
 		return backupResponse(inst, r), backupConflict(err)
@@ -369,7 +369,15 @@ func (o *operator) finalizeCompletedBackup(ctx context.Context, inst *corev1.Ins
 		return backupResponse(inst, completed), err
 	}
 	o.publishTenantReconcile(ctx, inst.Metadata.Tenant)
-	AppendInstanceTaskLog(ctx, o.taskLogs, inst.Metadata.UID, taskID, "备份已完成")
+	if result.SaveConfirmation != nil && result.SaveConfirmation.Status == corev1.BackupSaveConfirmationUnconfirmed {
+		warnMsg := strings.TrimSpace(result.SaveConfirmation.Warning)
+		if warnMsg == "" {
+			warnMsg = "未收到完整存档落盘回执"
+		}
+		AppendInstanceTaskLog(ctx, o.taskLogs, inst.Metadata.UID, taskID, "备份已归档，但存档落盘未完整确认: "+warnMsg)
+	} else {
+		AppendInstanceTaskLog(ctx, o.taskLogs, inst.Metadata.UID, taskID, "备份已完成")
+	}
 	FinishInstanceTaskLog(ctx, o.taskLogs, inst.Metadata.UID, taskID)
 	return backupResponse(inst, completed), o.enforceBackupRetention(ctx, inst, completed.Command.BackupUID)
 }
@@ -745,7 +753,7 @@ func (o *operator) retryBackupTransfer(ctx context.Context, inst *corev1.Instanc
 	if res.CompletedAt != nil {
 		completedAt = res.CompletedAt.UTC()
 	}
-	return &backupdb.Result{SizeBytes: res.SizeBytes, SHA256: res.SHA256, CompletedAt: completedAt}, nil
+	return &backupdb.Result{SizeBytes: res.SizeBytes, SHA256: res.SHA256, CompletedAt: completedAt, SaveConfirmation: res.SaveConfirmation}, nil
 }
 
 func (o *operator) closeBackup(ctx context.Context, r backupdb.Record, project bool) error {

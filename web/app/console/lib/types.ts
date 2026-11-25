@@ -130,7 +130,7 @@ export interface InstanceScheduleStatus {
   runID?: string;
   claimedAt?: string;
   lastRunAt?: string;
-  lastResult?: "Running" | "Unknown" | "Succeeded" | "Failed" | string;
+  lastResult?: "Running" | "Unknown" | "Succeeded" | "Warning" | "Failed" | string;
   lastOutput?: string;
   stage?: string;
   progress?: number;
@@ -191,6 +191,14 @@ export interface InstanceBackupSnapshot {
   addons?: InstanceBackupAddon[];
 }
 
+export interface InstanceBackupSaveConfirmation {
+  status?: "Confirmed" | "Unconfirmed" | string;
+  expectedShards?: string[];
+  confirmedShards?: string[];
+  unconfirmedShards?: string[];
+  warning?: string;
+}
+
 export interface InstanceBackupInspectionSummary {
   schemaVersion?: number;
   phase?: string;
@@ -237,6 +245,7 @@ export interface InstanceBackupRecord {
   restoreSourcePath?: string;
   restoreTargetPath?: string;
   restoreReplace?: boolean;
+  saveConfirmation?: InstanceBackupSaveConfirmation;
   snapshot?: InstanceBackupSnapshot;
   inspection?: InstanceBackupInspectionSummary;
 }

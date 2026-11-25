@@ -57,10 +57,11 @@ type Command struct {
 }
 
 type Result struct {
-	SizeBytes      int64     `json:"sizeBytes"`
-	SHA256         string    `json:"sha256,omitempty"`
-	CompletedAt    time.Time `json:"completedAt"`
-	StagingCleaned bool      `json:"stagingCleaned,omitempty"`
+	SizeBytes        int64                                  `json:"sizeBytes"`
+	SHA256           string                                 `json:"sha256,omitempty"`
+	CompletedAt      time.Time                              `json:"completedAt"`
+	StagingCleaned   bool                                   `json:"stagingCleaned,omitempty"`
+	SaveConfirmation *corev1.InstanceBackupSaveConfirmation `json:"saveConfirmation,omitempty"`
 }
 
 type Record struct {
