@@ -134,7 +134,7 @@ func resolveServerRelease(src driver.Source, req driver.ResolveReleaseRequest) (
 		FileName:      "package.tar.gz",
 		ArchiveFormat: driver.ArchiveFormatTarGz,
 		TargetPath:    ".",
-		UpstreamURL:   NewsURL(src.SteamAppID),
+		UpstreamURL:   driver.SteamNewsURL(src.SteamAppID),
 	}, nil
 }
 

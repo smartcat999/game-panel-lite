@@ -31,7 +31,8 @@ type modIODriver struct {
 func (d *modIODriver) Name() string { return driver.ProviderModIO }
 
 func (d *modIODriver) Capabilities(src driver.Source) driver.Capabilities {
-	return driver.Capabilities{Catalog: src.Format != driver.FormatServerPackage}
+	isCatalog := src.Format != driver.FormatServerPackage
+	return driver.Capabilities{Catalog: isCatalog, LiveDetailOverlay: isCatalog}
 }
 
 func (d *modIODriver) ParseTokens(raw string) []string {

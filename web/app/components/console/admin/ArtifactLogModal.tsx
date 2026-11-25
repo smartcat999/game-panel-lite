@@ -5,7 +5,7 @@ import type { RegistryArtifact } from "../../../console/lib/types";
 import { TaskLogModal, formatTaskByteValue } from "../shared/TaskLogModal";
 import { formatAddonVersion } from "./RegistryVersionModal";
 
-function stageLabel(artifact: RegistryArtifact | null): string {
+export function formatArtifactStageLabel(artifact: RegistryArtifact | null): string {
   const stage = artifact?.status?.stage;
   switch (stage) {
     case "Queued":
@@ -123,7 +123,7 @@ export function ArtifactLogModal({
       title={title ? `${title} · 日志` : "同步日志"}
       description={description}
       badgeTone={stageTone(artifact)}
-      badgeLabel={stageLabel(artifact)}
+      badgeLabel={formatArtifactStageLabel(artifact)}
       message={statusMessage}
       progress={progress}
       isIndeterminate={isIndeterminate}

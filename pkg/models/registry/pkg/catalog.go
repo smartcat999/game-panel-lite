@@ -16,6 +16,7 @@ import (
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/db"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/log"
 	"github.com/smartcat999/game-panel-cloud/pkg/models"
+	"github.com/smartcat999/game-panel-cloud/pkg/repo/pgutil"
 )
 
 const (
@@ -57,7 +58,10 @@ func (o *operator) listProxyCatalog(ctx context.Context, repoObj *registryv1.Rep
 	}
 	resolveRaw := strings.TrimSpace(opts.FieldSelector["resolve"])
 	gameVer := strings.TrimSpace(opts.FieldSelector["gameVersion"])
-	var res *addonmirror.Result
+	var (
+		res          *addonmirror.Result
+		nextContinue string
+	)
 	if resolveRaw != "" {
 		res, err = svc.Resolve(ctx, src, resolveRaw, gameVer)
 	} else {
@@ -84,10 +88,13 @@ func (o *operator) listProxyCatalog(ctx context.Context, repoObj *registryv1.Rep
 	for _, it := range res.Items {
 		items = append(items, convertMirrorItem(repoObj.Metadata.Name, it))
 	}
+	if resolveRaw == "" {
+		nextContinue = pgutil.NextContinue(opts.Offset, len(items), res.Total)
+	}
 	o.overlayPersistedPackageMeta(ctx, repoObj.Metadata.Name, items)
 	return &metav1.List[*registryv1.Package]{
 		TypeMeta: metav1.TypeMeta{APIVersion: registryv1.GroupVersion, Kind: "PackageList"},
-		Metadata: metav1.ListMeta{TotalCount: res.Total},
+		Metadata: metav1.ListMeta{Continue: nextContinue, TotalCount: res.Total},
 		Items:    items,
 	}, true, nil
 }
@@ -389,14 +396,12 @@ func (o *operator) normalizeProxyPackageItems(
 		return
 	}
 	svc, src, ok := o.proxyMirrorForRepo(ctx, repoObj)
-	for i, item := range items {
-		if needsMetadataHydration(repoObj, item) {
-			items[i] = o.hydratePersistedPackage(ctx, repoObj, item)
-		}
-	}
 	var latestMap map[string]string
-	if refreshLatest && ok {
-		latestMap = o.resolveRepoLatestVersions(ctx, svc, src, items)
+	if refreshLatest {
+		o.hydrateRepoItemsConcurrently(ctx, repoObj, items)
+		if ok {
+			latestMap = o.resolveRepoLatestVersions(ctx, svc, src, items)
+		}
 	}
 	for i, item := range items {
 		if item == nil {
@@ -410,6 +415,32 @@ func (o *operator) normalizeProxyPackageItems(
 		}
 		items[i] = item
 	}
+}
+
+func (o *operator) hydrateRepoItemsConcurrently(
+	ctx context.Context,
+	repoObj *registryv1.Repository,
+	items []*registryv1.Package,
+) {
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	for i, item := range items {
+		if !needsMetadataHydration(repoObj, item) {
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, pkg *registryv1.Package) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
+			items[idx] = o.hydratePersistedPackage(ctx, repoObj, pkg)
+		}(i, item)
+	}
+	wg.Wait()
 }
 
 func (o *operator) hydratePersistedPackage(
@@ -497,7 +528,7 @@ func (o *operator) persistHydratedPackage(ctx context.Context, merged *registryv
 	if o.db == nil || merged == nil || merged.Metadata.Name == "" || merged.Metadata.ResourceVersion == "" {
 		return merged
 	}
-	updated, err := o.db.Update(ctx, merged)
+	updated, err := o.db.HydrateMetadata(ctx, merged)
 	if err != nil {
 		if !errors.Is(err, db.ErrConflict) {
 			log.S().Warnw("failed to persist hydrated package metadata", "package", merged.Metadata.Name, "error", err)
@@ -689,9 +720,9 @@ func (o *operator) normalizeClusterPackageList(
 	if err != nil || repoList == nil {
 		return
 	}
-	if cachedOnly && !refreshUpstream {
+	if !refreshUpstream {
 		for _, repoObj := range repoList.Items {
-			o.normalizeRepoPackageList(ctx, repoObj, list, true, false)
+			o.normalizeRepoPackageList(ctx, repoObj, list, cachedOnly, false)
 		}
 		return
 	}

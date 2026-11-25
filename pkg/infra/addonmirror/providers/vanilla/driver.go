@@ -66,6 +66,9 @@ func (d *vanillaDriver) ListServerVersions(ctx context.Context, rt driver.Runtim
 }
 
 func (d *vanillaDriver) ResolveRelease(ctx context.Context, rt driver.Runtime, src driver.Source, req driver.ResolveReleaseRequest) (*driver.ResolvedRelease, error) {
+	if req.Package == driver.PackageVanillaMappings {
+		return ResolveServerMappings(ctx, rt, src.Endpoint, req.Version)
+	}
 	return Resolve(ctx, rt, src.Endpoint, req.Version)
 }
 

@@ -41,7 +41,8 @@ const (
 	ArchiveFormatJar   = "jar"
 	ArchiveFormatTMod  = "tmod"
 
-	SteamCMDScheme = "steamcmd://"
+	SteamCMDScheme         = "steamcmd://"
+	PackageVanillaMappings = "server_mappings"
 
 	SortPopular   = "popular"
 	SortDownloads = "downloads"

@@ -437,16 +437,6 @@ export function AddonsTab({
     [stagedAddons, repoName],
   );
 
-  const stagedCountByRepo = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const a of stagedAddons) {
-      if (a.repository) {
-        counts[a.repository] = (counts[a.repository] || 0) + 1;
-      }
-    }
-    return counts;
-  }, [stagedAddons]);
-
   const savedMap = useMemo(() => {
     const m = new Map<string, InstanceAddon>();
     for (const a of activeSavedAddons) {
@@ -1409,14 +1399,10 @@ export function AddonsTab({
                   setFilterQuery("");
                   setConfigTargetPkg(null);
                 }}
-                items={bindings.map((b) => {
-                  const count = stagedCountByRepo[b.repository] || 0;
-                  const lbl = b.label || addonBindingMeta(b).noun;
-                  return {
-                    value: b.repository,
-                    label: count > 0 ? `${lbl} (${count})` : lbl,
-                  };
-                })}
+                items={bindings.map((b) => ({
+                  value: b.repository,
+                  label: b.label || addonBindingMeta(b).noun,
+                }))}
               />
             )}
           </div>
@@ -1651,6 +1637,11 @@ export function AddonsTab({
                     const isInspectingCached =
                       Boolean(art?.status?.descriptor?.digest) && art?.status?.stage !== "Downloading";
                     statusBadge = { tone: "warning", label: isInspectingCached ? "解析中" : "下载中" };
+                  } else if (compat.incompatible && displayVersion) {
+                    statusBadge = {
+                      tone: compat.fixVersion ? "warning" : "danger",
+                      label: `不兼容 ${displayVersion}`,
+                    };
                   } else if (pendingRestart) {
                     statusBadge = { tone: "warning", label: "待重启" };
                   } else {
@@ -1722,20 +1713,17 @@ export function AddonsTab({
                           </span>
                           {compat.incompatible && displayVersion ? (
                             compat.fixVersion ? (
-                              <>
-                                <Badge tone="warning">不兼容 {displayVersion}</Badge>
-                                <button
-                                  type="button"
-                                  onClick={() => updateAddonVersion(addon.package, compat.fixVersion!)}
-                                  title={`切换至适配 ${displayVersion} 的版本 ${formatAddonVersion(compat.fixVersion)}`}
-                                  className={`inline-flex items-center gap-1 rounded-full bg-[#FEF3C7] px-2.5 py-0.5 text-xs font-medium text-[#92400E] transition-colors hover:bg-[#FDE68A] ${focusRing}`}
-                                >
-                                  <ArrowUpCircle className="h-3.5 w-3.5" />
-                                  切换适配版本
-                                </button>
-                              </>
+                              <button
+                                type="button"
+                                onClick={() => updateAddonVersion(addon.package, compat.fixVersion!)}
+                                title={`切换至适配 ${displayVersion} 的版本 ${formatAddonVersion(compat.fixVersion)}`}
+                                className={`inline-flex items-center gap-1 rounded-full bg-[#FEF3C7] px-2.5 py-0.5 text-xs font-medium text-[#92400E] transition-colors hover:bg-[#FDE68A] ${focusRing}`}
+                              >
+                                <ArrowUpCircle className="h-3.5 w-3.5" />
+                                切换适配版本
+                              </button>
                             ) : (
-                              <Badge tone="danger">不兼容 {displayVersion}</Badge>
+                              <span className="text-xs text-[#B42318]">暂无适配版</span>
                             )
                           ) : (
                             hasNewerUpstream &&

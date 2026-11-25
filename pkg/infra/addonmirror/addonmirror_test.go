@@ -30,18 +30,18 @@ Adds 300+ tactical weapons to survival servers.
 [b]Map Folder:[/b] RavenCreek
 [b]Map Folder:[/b] Muldraugh, KY`
 
-	mods, maps := ExtractProjectZomboidMeta(raw)
+	mods, maps := steam.ExtractProjectZomboidMeta(raw)
 	if len(mods) != 2 || mods[0] != "Brita" || mods[1] != "Brita_2" {
 		t.Fatalf("unexpected modIDs: %#v", mods)
 	}
 	if len(maps) != 1 || maps[0] != "RavenCreek" {
 		t.Fatalf("unexpected mapFolders: %#v", maps)
 	}
-	summary := SummarizeText(CleanSteamBBCode(raw), 80)
+	summary := steam.SummarizeText(steam.CleanBBCode(raw), 80)
 	if !strings.Contains(summary, "Brita's Weapon Pack") {
 		t.Fatalf("unexpected summary: %q", summary)
 	}
-	md := FormatSteamBBCodeMarkdown(raw + "\n[url=https://example.com]Docs[/url]\n[*]Item A")
+	md := steam.FormatBBCodeMarkdown(raw + "\n[url=https://example.com]Docs[/url]\n[*]Item A")
 	if !strings.Contains(md, "# Brita's Weapon Pack") || !strings.Contains(md, "[Docs](https://example.com)") || !strings.Contains(md, "- Item A") {
 		t.Fatalf("unexpected formatted markdown: %q", md)
 	}
@@ -51,7 +51,7 @@ func TestFormatSteamBBCodeNestedURLImageNoNullBytes(t *testing.T) {
 	raw := "Intro text\x00\n" +
 		"[url=https://steamcommunity.com/id/CrazyContraption/myworkshopfiles/?appid=1281930][img]http://i.imgur.com/aJmBEpZ.png[/img][/url]\n" +
 		"[code]whitelist.txt[/code]"
-	md := FormatSteamBBCodeMarkdown(raw)
+	md := steam.FormatBBCodeMarkdown(raw)
 	if strings.Contains(md, "\x00") {
 		t.Fatalf("expected no NUL bytes in markdown, got %q", md)
 	}
@@ -59,7 +59,7 @@ func TestFormatSteamBBCodeNestedURLImageNoNullBytes(t *testing.T) {
 	if !strings.Contains(md, want) {
 		t.Fatalf("expected %q in markdown, got %q", want, md)
 	}
-	cleaned := CleanSteamBBCode(raw)
+	cleaned := steam.CleanBBCode(raw)
 	if strings.Contains(cleaned, "\x00") {
 		t.Fatalf("expected no NUL bytes in cleaned text, got %q", cleaned)
 	}

@@ -98,6 +98,13 @@ for mod_dir in ${modular_dirs}; do
       fi
     done < <(find "${mod_dir}/providers" -mindepth 1 -maxdepth 1 -type d | sort)
   fi
+
+  direct_prov_hits=$(find "${mod_dir}" -maxdepth 1 -type f -name '*.go' ! -name 'register.go' ! -name '*_test.go' -exec grep -Hn "${MODULE}/${mod_dir}/providers/" {} + 2>/dev/null || true)
+  if [[ -n "${direct_prov_hits}" ]]; then
+    echo "[verify-rules] Non-register.go files in ${mod_dir} must not import concrete providers directly (dispatch via driver registry):" >&2
+    printf '%s\n' "${direct_prov_hits}" >&2
+    failed=1
+  fi
 done
 
 # 5. GORM persistence records must live in pkg/apis/*/v1/records.go (AGENTS.md Section 2 Rule 1)

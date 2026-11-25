@@ -559,12 +559,22 @@ func TestHydratePersistedPackagePersistsRawIconAndCoolsDown(t *testing.T) {
 	if err != nil || storedMMS.IconURL != addonmirror.DefaultGitHubAvatarBaseURL+"/alliedmodders?s=128" || !strings.Contains(storedMMS.Title, "Metamod:Source") {
 		t.Fatalf("expected hydrated metamod persisted with raw icon & title, got %#v err=%v", storedMMS, err)
 	}
+	if storedMMS.Metadata.Generation != 1 {
+		t.Fatalf("expected metadata hydration not to bump generation, got %d", storedMMS.Metadata.Generation)
+	}
 	storedCSS, err := pkgdb.NewDB(fix.Pool).Get(ctx, "cs2-plugins.counterstrikesharp")
 	if err != nil || storedCSS.IconURL != "https://avatars.githubusercontent.com/u/4160975?v=4" {
 		t.Fatalf("expected hydrated counterstrikesharp persisted with raw icon, got %#v err=%v", storedCSS, err)
 	}
+	if storedCSS.Metadata.Generation != 1 {
+		t.Fatalf("expected CSS metadata hydration not to bump generation, got %d", storedCSS.Metadata.Generation)
+	}
 	if noopMerged, changed := mergeHydratedPackageMetadata(storedCSS, storedCSS); changed || noopMerged.IconURL != storedCSS.IconURL {
 		t.Fatalf("expected identical metadata merge to report changed=false")
+	}
+	paged, err := op.List(ctx, db.ListOptions{Limit: 1})
+	if err != nil || paged.Metadata.Continue == "" {
+		t.Fatalf("expected Continue token on paged DB list, got meta=%+v err=%v", paged, err)
 	}
 }
 

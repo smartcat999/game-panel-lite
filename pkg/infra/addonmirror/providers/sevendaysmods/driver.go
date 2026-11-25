@@ -28,7 +28,8 @@ type sevenDaysModsDriver struct {
 func (d *sevenDaysModsDriver) Name() string { return driver.ProviderSevenDaysMods }
 
 func (d *sevenDaysModsDriver) Capabilities(src driver.Source) driver.Capabilities {
-	return driver.Capabilities{Catalog: src.Format != driver.FormatServerPackage}
+	isCatalog := src.Format != driver.FormatServerPackage
+	return driver.Capabilities{Catalog: isCatalog, LiveDetailOverlay: isCatalog}
 }
 
 func (d *sevenDaysModsDriver) ParseTokens(raw string) []string {

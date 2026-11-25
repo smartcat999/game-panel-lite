@@ -179,12 +179,24 @@ func (s *DB) List(ctx context.Context, opts db.ListOptions) (*metav1.List[*regis
 	}
 	return &metav1.List[*registryv1.Package]{
 		TypeMeta: metav1.TypeMeta{APIVersion: registryv1.GroupVersion, Kind: "PackageList"},
-		Metadata: metav1.ListMeta{TotalCount: total},
-		Items:    items,
+		Metadata: metav1.ListMeta{
+			Continue:   pgutil.NextContinue(opts.Offset, len(items), total),
+			TotalCount: total,
+		},
+		Items: items,
 	}, nil
 }
 
 func (s *DB) Update(ctx context.Context, in *registryv1.Package) (*registryv1.Package, error) {
+	return s.updatePackage(ctx, in, true)
+}
+
+// HydrateMetadata refreshes cached upstream metadata fields without advancing desired generation.
+func (s *DB) HydrateMetadata(ctx context.Context, in *registryv1.Package) (*registryv1.Package, error) {
+	return s.updatePackage(ctx, in, false)
+}
+
+func (s *DB) updatePackage(ctx context.Context, in *registryv1.Package, bumpGeneration bool) (*registryv1.Package, error) {
 	if s == nil || s.orm == nil {
 		return nil, errors.New("db is nil")
 	}
@@ -205,7 +217,10 @@ func (s *DB) Update(ctx context.Context, in *registryv1.Package) (*registryv1.Pa
 	newRV := oldRV + 1
 	cp.Metadata.UID = existing.Metadata.UID
 	cp.Metadata.CreationTimestamp = existing.Metadata.CreationTimestamp
-	cp.Metadata.Generation = existing.Metadata.Generation + 1
+	cp.Metadata.Generation = existing.Metadata.Generation
+	if bumpGeneration {
+		cp.Metadata.Generation++
+	}
 	return s.commitUpdate(ctx, &cp, oldRV, newRV)
 }
 
