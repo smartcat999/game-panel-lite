@@ -103,20 +103,54 @@ docker compose up -d
 
 面板核心数据分布在两部分：
 
-1. **游戏世界与服务端缓存目录**（默认宿主机 `/var/lib/gamepanel/instances`，可在 `.env` 中通过 `GP_AGENT_WORK_DIR` 查看）
-2. **Docker 持久化卷**：
-   - `postgres_data`：账号、权限、服务器声明配置、定时任务记录
-   - `seaweedfs_data`：面板内创建的游戏在线备份压缩包（S3 对象存储）
+1. **游戏世界与服务端缓存目录**：默认 `/var/lib/gamepanel/instances`（当与同机其他面板共存时，`install.sh` 会自动设为 `/var/lib/gamepanel-lite/instances`），**务必以旧机 `.env` 中实际的 `GP_AGENT_WORK_DIR` 为准**。
+2. **持久化数据库与对象存储**：
+   - `postgres_data`：账号、权限、服务器声明配置、定时任务与备份元数据记录
+   - `seaweedfs_data`（默认单机部署内置 SeaweedFS）或外部 S3：面板内创建的游戏在线备份压缩包与镜像站已同步的制品 Blob
 
-### 迁移步骤建议
+> **重要提醒**：请务必在旧机与原数据卷保留至新机**恢复验收通过**后再清理；仅迁移数据库而遗漏 `seaweedfs_data` 会导致面板上能看到历史备份记录但无法下载或恢复压缩包。
 
-1. 在旧服务器停止面板服务（确保数据静默落盘）：
+### 默认单机部署（内置 SeaweedFS）迁移步骤
+
+1. 在面板确认当前没有正在执行的备份、恢复或镜像同步任务后，先停止写入组件，再停止 SeaweedFS，确保对象存储卷静默落盘：
    ```bash
-   docker compose stop apiserver controller-manager node-agent
+   docker compose stop apiserver controller-manager registry-worker node-agent
+   docker compose stop seaweedfs
    ```
-2. 打包 `.env`、`/var/lib/gamepanel/instances`，并通过 `pg_dump` 导出数据库：
+2. 导出数据库，确认 `.env` 中的 `GP_AGENT_WORK_DIR` 并打包实例目录，同时解析并导出 SeaweedFS 实际挂载的数据卷（如修改过 `deploy/seaweedfs/s3.json` 也请一并打包）：
    ```bash
    docker compose exec postgres pg_dump -U gamepanel gamepanel > gamepanel-db.sql
-   tar -czf instances-backup.tar.gz -C /var/lib/gamepanel instances
+
+   WORK_DIR="$(grep -E '^GP_AGENT_WORK_DIR=' .env | cut -d= -f2-)"
+   WORK_DIR="${WORK_DIR:-/var/lib/gamepanel/instances}"
+   tar -czf instances-backup.tar.gz -C "$(dirname "$WORK_DIR")" "$(basename "$WORK_DIR")"
+
+   SW_VOL="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' gamepanel-lite-seaweedfs)"
+   docker run --rm -v "${SW_VOL}:/data:ro" -v "$PWD":/backup alpine tar -czf /backup/seaweedfs-data.tar.gz -C /data .
    ```
-3. 将 `.env`、`gamepanel-db.sql`、`instances-backup.tar.gz` 传输到新服务器后，先解压 `/var/lib/gamepanel/instances`，启动 `postgres` 并导入 SQL，再执行 `docker compose up -d` 启动全部服务。
+3. 将 `.env`、自定义 `deploy/seaweedfs/s3.json`（若有）、`gamepanel-db.sql`、`instances-backup.tar.gz`、`seaweedfs-data.tar.gz` 传输到新服务器后，按顺序恢复：
+   ```bash
+   # 1) 还原实例工作目录（与 .env 中 GP_AGENT_WORK_DIR 一致）
+   WORK_DIR="$(grep -E '^GP_AGENT_WORK_DIR=' .env | cut -d= -f2-)"
+   WORK_DIR="${WORK_DIR:-/var/lib/gamepanel/instances}"
+   mkdir -p "$(dirname "$WORK_DIR")"
+   tar -xzf instances-backup.tar.gz -C "$(dirname "$WORK_DIR")"
+
+   # 2) 初始化 Compose 目标卷后，先停止 seaweedfs 并恢复 seaweedfs_data
+   docker compose up --no-start seaweedfs postgres
+   NEW_SW_VOL="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' gamepanel-lite-seaweedfs)"
+   docker run --rm -v "${NEW_SW_VOL}:/data" -v "$PWD":/backup alpine sh -c 'rm -rf /data/* && tar -xzf /backup/seaweedfs-data.tar.gz -C /data'
+
+   # 3) 启动 postgres 导入数据库并核对 S3 桶名与凭据（GP_S3_BUCKET / GP_S3_ACCESS_KEY / GP_S3_SECRET_KEY / s3.json）
+   docker compose up -d postgres
+   cat gamepanel-db.sql | docker compose exec -T postgres psql -U gamepanel -d gamepanel
+
+   # 4) 启动全部服务
+   docker compose up -d
+   ```
+4. **恢复验收**：从新机面板挑选一条**迁移前已有的历史备份记录**执行下载校验并测试恢复到测试实例，确认能正常读取且游戏世界内容一致后，再下线旧机或清理旧卷。
+
+### 外部 S3 对象存储部署迁移说明
+
+- **沿用原外部 S3 桶**：新机 `.env` 保持相同的 `GP_S3_ENDPOINT`、`GP_S3_REGION`、`GP_S3_BUCKET` 及访问凭据（`GP_S3_ACCESS_KEY` / `GP_S3_SECRET_KEY`），迁移前核对新机到外部 S3 的网络连通性与读写权限，仅需迁移 `.env`、数据库（`pg_dump`）与 `GP_AGENT_WORK_DIR`。
+- **更换新的 S3 桶**：必须将原桶内全部对象**按原有对象键（Object Key）原样同步**到新桶后，再切换新机 `.env` 中的 `GP_S3_*` 配置并启动面板。
